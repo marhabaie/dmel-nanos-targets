@@ -1,0 +1,119 @@
+---
+title: "Analysing RNAseq Data"
+author: "Mohammad Marhabaie"
+date: "6 September 2017"
+output:
+  html_document:
+    df_print: paged
+    toc: TRUE
+    code_folding: show
+    toc_depth: 3
+editor_options:
+  chunk_output_type: inline
+---
+
+# Summary
+## Background
+The **overall** goal of this project is to find which RNA is regulated by Nanos (Nos). 
+The **immediate** goal of this report is to analyze RNAseq Data and save them as `.Rda` files. 
+## Methods
+### Input Data
+### Output Data 
+### Statistics
+## Results
+## Conclusion
+
+
+# Install packages
+```{r }
+
+### get packages
+
+## 'http' if 'https' unavailable
+# update.packages()
+
+# install.packages(c("data.table", "eulerr","gplots","ggplot2", "ggrepel", "reshape2", "seqinr", "splitstackshape", "VennDiagram","gridExtra","tidyverse","openxlsx","colorspace","colorRamps","ggpubr","dplyr","MASS","ggpmisc", "stringr", "stats")) # EBSeq? plotrix
+# 
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#   install.packages("BiocManager")
+# BiocManager::install(c("edgeR","Biostrings","Biobase")) # "GenomicRanges", , "DESeq2"? "RCurl" ,"GenomicFeatures" ,"rtracklayer" ,"DEXSeq" ,"ShortRead" ,"BiocParallel" ,"motifStack" ,"seqLogo" ,"Rsubread" ,"cummeRbund" ,"multtest"?
+# 
+# #Bioconductor packages
+# # library(EBSeq)
+# # library(windowscanr)
+
+
+# # new ones for GSEA
+# BiocManager::install(c("enrichplot", "DOSE", "fgsea", "gage"))
+# install.packages(c("ggupset"))
+
+# install.packages("ggridges")
+
+```
+
+# Setting up Basics
+First we prepare the paths for the data. 
+
+```{r paths, results="hide", echo=FALSE, warning=FALSE}
+#rm(list = ls())
+#getwd()
+source("helper_code.R")
+formula <- y ~ x
+load("Data/FBgnID_FBtrID_BDGP6_22_96.RData")
+load("Data/all3UTRs_Ensembl_mart_6_22_96.RData")
+load("Data/all3UTR_pure.RData")
+load("Data/allCDS_r6_22.RData")
+```
+
+
+# --------------------------
+# Fisher test for Figure 1
+```{r }
+
+## HATCHING
+# Nos vs Upf1
+fisher.test(matrix(c( 275 ,19, 401, 18),nrow = 2,byrow = T),alternative="two.sided") # p-value = 0.2307, sample estimates odds ratio=   0.6501107
+# Upf1-Nos vs Upf1
+fisher.test(matrix(c( 275 ,19, 0, 245),nrow = 2,byrow = T),alternative="two.sided") # p-value =< 2.2e-16 , sample estimates odds ratio=  inf
+# Upf1-NosL7 vs Upf1
+fisher.test(matrix(c( 275 ,19, 326, 57),nrow = 2,byrow = T),alternative="two.sided") # p-value = 0.0005381 , sample estimates odds ratio=   2.52763
+# Upf1-NosL7 vs Upf1-Nos
+fisher.test(matrix(c( 0 , 246, 326, 57),nrow = 2,byrow = T),alternative="two.sided") # p-value < 2.2e-16 , sample estimates odds ratio=  inf
+
+
+## DAPI CYCLE 2-13
+# Nos vs Upf1
+fisher.test(matrix(c( 343, 0, 267, 3),nrow = 2,byrow = T),alternative="two.sided") # p-value = 0.08492 , sample estimates odds ratio=  inf
+# Upf1-Nos vs Upf1
+fisher.test(matrix(c( 343, 0, 106, 178),nrow = 2,byrow = T),alternative="two.sided") # p-value < 2.2e-16 , sample estimates odds ratio=  inf
+# Upf1-NosL7 vs Upf1
+fisher.test(matrix(c( 343, 0, 238, 14),nrow = 2,byrow = T),alternative="two.sided") # p-value = 4.826e-06 , sample estimates odds ratio=  inf
+# Upf1-NosL7 vs Upf1-Nos
+fisher.test(matrix(c( 106, 178, 238, 14),nrow = 2,byrow = T),alternative="two.sided") #  p-value < 2.2e-16 , sample estimates odds ratio=  0.03529591
+
+## EMBRYONIC DEV
+# Nos vs Upf1
+fisher.test(matrix(c( 280, 15, 297, 16),nrow = 2,byrow = T),alternative="two.sided") # p-value =1 , sample estimates odds ratio=  1.005603
+# Upf1-Nos vs Upf1
+fisher.test(matrix(c( 280, 15, 2, 466),nrow = 2,byrow = T),alternative="two.sided") # p-value = < 2.2e-16 , sample estimates odds ratio=  4236.491 
+# Upf1-Nos vs Upf1
+fisher.test(matrix(c( 280, 15, 16, 452),nrow = 2,byrow = T),alternative="two.sided") # p-value = < 2.2e-16 , sample estimates odds ratio=  514.8511  
+
+#fisher.test(matrix(c( 280, 15, 2, 466),nrow = 2,byrow = T),alternative="two.sided") # p-value = < 2.2e-16 , sample estimates odds ratio=  4236.491  
+
+
+# Upf1-NosL7 vs Upf1
+fisher.test(matrix(c( 280, 15, 285, 72),nrow = 2,byrow = T),alternative="two.sided") # p-value = 6.439e-09 , sample estimates odds ratio=  4.706164 
+# Upf1-NosL7 vs Upf1-Nos
+fisher.test(matrix(c( 16, 452, 285, 72),nrow = 2,byrow = T),alternative="two.sided") # p-value = 2.2e-16 , sample estimates odds ratio=  0.009050626 
+
+
+```
+
+# Session Information
+```{r session_info}
+
+sessionInfo()
+
+```
+
