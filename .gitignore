@@ -1,6 +1,9 @@
 # History files
 .Rhistory
 .Rapp.history
+.DS_Store
+
+Data/dmel_ensembl_6_22_96/dmel-all-CDS-r6.22.fasta
 
 # Session Data files
 .RData

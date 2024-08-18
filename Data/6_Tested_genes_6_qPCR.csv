@@ -1,0 +1,17 @@
+﻿FBgnID,status,current_symbol,geneName,qPCR_ddCT,RNASeq_FC,qPCR_95Cnf,qPCR_StDev
+FBgn0063449,up,Uhg2,Uhg2,5.17,4.95,0.46,0.41
+FBgn0045800,up,Uhg1,Uhg1,4.01,4.26,0.22,0.19
+FBgn0034959,up,Xxylt,CG11388,2.61,2.57,0.48,0.42
+FBgn0002466,up,sti,sti,0.94,1.15,1.06,0.94
+FBgn0000405,notReg,CycB,CycB,0.31,0.07,0.74,0.65
+FBgn0004867,notReg,RpS2,RpS2,0.00,0.04,0.17,0.15
+FBgn0010300,notReg,brat,brat,-0.18,-0.47,0.79,0.70
+FBgn0026206,down,mei-P26,mei-P26,-1.31,-1.74,0.91,0.81
+FBgn0287720,down,Pen,Pen,-1.14,-1.84,0.62,0.55
+FBgn0037728,down,p23,p23,-2.15,-2.39,0.41,0.36
+FBgn0015799,down,Rbf,Rbf,-2.61,-3.34,0.65,0.57
+FBgn0030086,down,CCT2,CCT2,-2.63,-3.85,0.12,0.11
+FBgn0000166,down,bcd,bcd,-3.04,-5.10,0.66,0.58
+FBgn0037580,down,DppIII,DppIII,-5.22,-6.09,0.72,0.63
+FBgn0001180,down,hb,hb,-4.07,-7.05,0.82,0.73
+FBgn0030931,down,Xrcc2,Xrcc2,-4.93,-8.87,0.45,0.40

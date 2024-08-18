@@ -12,52 +12,46 @@ editor_options:
   chunk_output_type: inline
 ---
 
-# Summary
-## Background
-The **overall** goal of this project is to find which RNA is regulated by Nanos (Nos). 
-The **immediate** goal of this report is to analyze RNAseq Data and save them as `.Rda` files. 
-## Methods
-### Input Data
-### Output Data 
-### Statistics
-## Results
-## Conclusion
 
+# Load Libraries
+```{r}
 
-# Install packages
-```{r }
+library(ggplot2)
+theme_set(theme_bw(base_size = 15))
+library(seqinr)
+library(stringr)
+library(reshape2)
+library(ggrepel)
+library(stats)
+library(VennDiagram)
+library(eulerr)
+library(splitstackshape)
+library(colorspace)
+library(colorRamps)
+library(openxlsx)
 
-### get packages
+#Bioconductor packages
+#library(EBSeq)
+library(edgeR)
+library(Biostrings)
+library(data.table)
+library(Biobase)
+# library(windowscanr)
+library(MASS)
+library(ggpmisc)
 
-## 'http' if 'https' unavailable
-# update.packages()
-
-# install.packages(c("data.table", "eulerr","gplots","ggplot2", "ggrepel", "reshape2", "seqinr", "splitstackshape", "VennDiagram","gridExtra","tidyverse","openxlsx","colorspace","colorRamps","ggpubr","dplyr","MASS","ggpmisc", "stringr", "stats")) # EBSeq? plotrix
-# 
-# if (!requireNamespace("BiocManager", quietly = TRUE))
-#   install.packages("BiocManager")
-# BiocManager::install(c("edgeR","Biostrings","Biobase")) # "GenomicRanges", , "DESeq2"? "RCurl" ,"GenomicFeatures" ,"rtracklayer" ,"DEXSeq" ,"ShortRead" ,"BiocParallel" ,"motifStack" ,"seqLogo" ,"Rsubread" ,"cummeRbund" ,"multtest"?
-# 
-# #Bioconductor packages
-# # library(EBSeq)
-# # library(windowscanr)
-
-
-# # new ones for GSEA
-# BiocManager::install(c("enrichplot", "DOSE", "fgsea", "gage"))
-# install.packages(c("ggupset"))
-
-# install.packages("ggridges")
+library(scales)
+library(ggsci)
+library(tidyverse)
+library(edgeR)
 
 ```
 
-# Setting up Basics
+# Load helper data
 First we prepare the paths for the data. 
 
-```{r paths, results="hide", echo=FALSE, warning=FALSE}
-#rm(list = ls())
-#getwd()
-source("helper_code.R")
+```{r}
+rm(list = ls())
 formula <- y ~ x
 load("Data/FBgnID_FBtrID_BDGP6_22_96.RData")
 load("Data/all3UTRs_Ensembl_mart_6_22_96.RData")
@@ -107,6 +101,2536 @@ fisher.test(matrix(c( 280, 15, 285, 72),nrow = 2,byrow = T),alternative="two.sid
 # Upf1-NosL7 vs Upf1-Nos
 fisher.test(matrix(c( 16, 452, 285, 72),nrow = 2,byrow = T),alternative="two.sided") # p-value = 2.2e-16 , sample estimates odds ratio=  0.009050626 
 
+
+```
+
+# --------------------------
+# Helper functions
+
+
+## Colors
+```{r}
+# a colorblind friendly palette with grey:
+cb_palette <- c("#D55E00","#0072B2", "#CC79A7","#F0E442","#009E73", "#56B4E9", "#E69F00","#999999")
+smearplot_cb_palette <- c("#0072B2","#999999","#D55E00")
+hlines_col <- "#009E73"
+presentation_palette_genes <- c("firebrick3","#999999","firebrick3")
+percent_col <- "darkgreen"
+tmpPointSize <- 0.5
+point_color_alpha = 1
+annotationSize <- 5
+```
+
+
+## Mitochondiral Genes
+```{r}
+
+mitochondrial_genes_mtOnly <- c("FBgn0013672","FBgn0013673","FBgn0013674","FBgn0013675","FBgn0013676","FBgn0013678","FBgn0013679","FBgn0013680","FBgn0013681","FBgn0013683","FBgn0013684","FBgn0013685","FBgn0013686","FBgn0013688","FBgn0013689","FBgn0013690","FBgn0013691","FBgn0013692","FBgn0013693","FBgn0013694","FBgn0013695","FBgn0013696","FBgn0013697","FBgn0013698","FBgn0013699","FBgn0013700","FBgn0013701","FBgn0013702","FBgn0013703","FBgn0013704","FBgn0013705","FBgn0013706","FBgn0013707","FBgn0013708","FBgn0013709","FBgn0013710","FBgn0262952")
+
+mitochondiral_genes_all <- c("FBgn0001098","FBgn0001125","FBgn0001142","FBgn0001995","FBgn0003714","FBgn0004363","FBgn0004406","FBgn0004407","FBgn0005322","FBgn0010100","FBgn0010213","FBgn0010217","FBgn0010438","FBgn0011211","FBgn0011262","FBgn0011361","FBgn0011787","FBgn0013298","FBgn0013672","FBgn0013673","FBgn0013674","FBgn0013675","FBgn0013676","FBgn0013678","FBgn0013679","FBgn0013680","FBgn0013681","FBgn0013683","FBgn0013684","FBgn0013685","FBgn0013686","FBgn0013687","FBgn0013688","FBgn0013689","FBgn0013690","FBgn0013691","FBgn0013692","FBgn0013693","FBgn0013694","FBgn0013695","FBgn0013696","FBgn0013697","FBgn0013698","FBgn0013699","FBgn0013700","FBgn0013701","FBgn0013702","FBgn0013703","FBgn0013704","FBgn0013705","FBgn0013706","FBgn0013707","FBgn0013708","FBgn0013709","FBgn0013710","FBgn0014023","FBgn0015245","FBgn0021750","FBgn0022160","FBgn0023519","FBgn0024360","FBgn0024556","FBgn0025352","FBgn0026409","FBgn0026741","FBgn0027082","FBgn0027083","FBgn0027085","FBgn0027615","FBgn0027786","FBgn0028479","FBgn0028530","FBgn0028648","FBgn0028962","FBgn0029718","FBgn0029870","FBgn0030433","FBgn0030552","FBgn0030572","FBgn0030584","FBgn0030686","FBgn0030692","FBgn0030786","FBgn0031231","FBgn0031357","FBgn0031639","FBgn0031651","FBgn0031660","FBgn0031881","FBgn0031893","FBgn0032053","FBgn0032154","FBgn0032236","FBgn0032486","FBgn0032646","FBgn0032720","FBgn0032849","FBgn0033184","FBgn0033208","FBgn0033451","FBgn0033480","FBgn0033712","FBgn0033883","FBgn0033900","FBgn0033907","FBgn0034001","FBgn0034177","FBgn0034361","FBgn0034497","FBgn0034579","FBgn0034727","FBgn0034893","FBgn0034973","FBgn0034986","FBgn0035064","FBgn0035122","FBgn0035272","FBgn0035335","FBgn0035374","FBgn0035483","FBgn0035534","FBgn0035600","FBgn0035811","FBgn0035942","FBgn0035980","FBgn0036135","FBgn0036335","FBgn0036462","FBgn0036557","FBgn0036569","FBgn0036629","FBgn0036763","FBgn0036774","FBgn0036853","FBgn0036990","FBgn0037008","FBgn0037330","FBgn0037506","FBgn0037526","FBgn0037529","FBgn0037566","FBgn0037608","FBgn0037778","FBgn0037862","FBgn0037892","FBgn0038234","FBgn0038271","FBgn0038307","FBgn0038319","FBgn0038426","FBgn0038474","FBgn0038519","FBgn0038584","FBgn0038662","FBgn0038678","FBgn0038805","FBgn0038923","FBgn0039111","FBgn0039140","FBgn0039159","FBgn0039555","FBgn0039588","FBgn0039651","FBgn0039765","FBgn0039835","FBgn0039969","FBgn0040389","FBgn0040871","FBgn0040907","FBgn0042112","FBgn0042185","FBgn0044030","FBgn0044510","FBgn0044511","FBgn0050481","FBgn0051133","FBgn0051159","FBgn0051450","FBgn0051739","FBgn0052103","FBgn0053002","FBgn0069923","FBgn0083983","FBgn0260407","FBgn0261353","FBgn0261380","FBgn0261381","FBgn0261862","FBgn0261938","FBgn0262559","FBgn0262952","FBgn0263133","FBgn0263863","FBgn0263977","FBgn0263987","FBgn0267976","FBgn0275436","FBgn0285951","FBgn0286508")
+
+```
+
+
+## Motives
+```{r}
+
+CorePRE_Seq <- "TGTA[ATC]ATA"   # 8 nt, UGUAHATA     #  THIS IS THE Pumilio SITE
+CoreBBS_Seq <- "[AT]TGTT[GA]"          # WUGUUR      #  THIS IS THE BRAT SITE
+Loedige_Brat_Seq <- "[AT]TGTT[TGA]"
+CoreBru_Seq <- "T[AG]T[AG]T[AG]T"                  #  THIS IS THE BRUNO SITE
+weidmannNBSPRE_Seq <- "[AT][AT][AT]TGTA"
+mmNBSPRE_Seq <- "[AT][AT][AT]TGTT"
+NBSPRE_Seq <- "[AT][AT][AT]TGT[AT]"
+weidmannNBSPRE4nt_Seq <- "[AT][AT][AT][AT]TGTA"   #[ATC]
+mmNBSPRE4nt_Seq <- "[AT][AT][AT][AT]TGTT"         #[ATC]
+NBSPRE4nt_Seq <- "[AT][AT][AT][AT]TGT[AT]"     #[ATC]
+
+Bru0Seq_1 <- "TT[AG]T[AG]T[AG]TT"
+BruSeq_Consensus_1 <- "TT[AG][TG][AG]T[AG]"
+BruSeq_Consensus_2 <- "(TTATATA)|(TTATATG)|(TTATGTG)|(TTAGATA)|(TTAGATG)|(TTAGGTA)|(TTAGGTG)|(TTGTGTG)|(TTGGATA)|(TTGGATG)|(TTGGGTA)|(TTGGGTG)"
+BruSeq_Consensus_3 <- "(TT[AG]T[AG]T[AG]TT)|(TTA[TG]ATG)|(TTATGT)"
+
+Smg_Seq <- "GC[ATCG]GG[ATCG]C"  # CNGGN from Chen, L.,... Lipshitz  Smibert, C. a. (2014). 
+
+scrambledNBSPRE_Seq <- "[AT][AT][AT]T[AT]TG"
+scrambledBru_Seq <- "[AG]TT[AG]TT[AG]"
+
+rcompCoreBru_Seq <- "A[TC]A[TC]A[TC]A"
+rcompNBSPRE_Seq <- "[AT]ACA[AT][AT][AT]"
+rcompPRE_Seq <- "TAT[ATG]TACA"
+rcompBBS_Seq <- "[TC]AACA[AT]"
+
+```
+
+
+## Helper functions
+```{r}
+
+# it includes all genes that are common in all 4 conditions
+makeCompleteGeneList <- function(useOriginal=F){
+  sigGenes_WVsUpf <- subset(gnsRSEMEdgeR_WVsUpf,select=c(FBgnID,GeneName,avgTPM,logTPM,logCPM,logFC,FDR,sigFDR,nonSigFDR,sig,sigDep,sigUp,notReg,StrictNonSig,stat_status,status2,status3,status,status5))
+  sigGenes_WVsNos <- subset(gnsRSEMEdgeR_WVsNos,select=c(FBgnID,logFC,FDR,sigFDR,nonSigFDR,sig,sigDep,sigUp,notReg,StrictNonSig,stat_status,status2,status3,status,status5))
+  if (useOriginal){
+    sigGenes_WVsUpfNos <- subset(gnsRSEMEdgeR_WVsUpfNos_org,select=c(FBgnID,logFC,FDR,sigFDR,nonSigFDR,sig,sigDep,sigUp,notReg,StrictNonSig,stat_status,status2,status3,status,status5))
+    sigGenes_WVsUNL7 <- subset(gnsRSEMEdgeR_WVsUNL7_org,select=c(FBgnID,logFC,FDR,sigFDR,nonSigFDR,sig,sigDep,sigUp,notReg,StrictNonSig,stat_status,status2,status3,status,status5))
+  }
+  else {
+    sigGenes_WVsUpfNos <- subset(gnsRSEMEdgeR_WVsUpfNos,select=c(FBgnID,logFC,FDR,sigFDR,nonSigFDR,sig,sigDep,sigUp,notReg,StrictNonSig,stat_status,status2,status3,status,status5))
+    sigGenes_WVsUNL7 <- subset(gnsRSEMEdgeR_WVsUNL7,select=c(FBgnID,logFC,FDR,sigFDR,nonSigFDR,sig,sigDep,sigUp,notReg,StrictNonSig,stat_status,status2,status3,status,status5))
+  }
+
+  colnames(sigGenes_WVsUpf) <- paste(colnames(sigGenes_WVsUpf),"_Upf",sep = "")
+  colnames(sigGenes_WVsNos) <- paste(colnames(sigGenes_WVsNos),"_Nos",sep = "")
+  colnames(sigGenes_WVsUpfNos) <- paste(colnames(sigGenes_WVsUpfNos),"_UpfNos",sep = "")
+  colnames(sigGenes_WVsUNL7) <- paste(colnames(sigGenes_WVsUNL7),"_UNL7",sep = "")
+  
+  # do not use 'keep all' because Upf and/or Nos data have more genes/transcripts in them as some are removed from UN/UNL7
+  rawCompleteGeneSet <- merge(merge(merge(sigGenes_WVsUpf,sigGenes_WVsNos,by = 1),sigGenes_WVsUpfNos,by = 1),sigGenes_WVsUNL7,by = 1)
+  colnames(rawCompleteGeneSet)[c(1:5)] <- c("FBgnID","GeneName","avgTPM","logTPM","logCPM")
+  return(rawCompleteGeneSet)
+}
+
+# it includes all genes that are common in all 4  conditions
+makeCompleteTranscriptList <- function(useOriginal=F){
+  sigGenes_WVsUpf <- subset(isoformsEdgeR_WVsUpf,select=c(TrID,FBgnID,GeneName,avgTPM,logTPM,RNALength,log2RNALength,logCPM,logFC,FDR,sigFDR,nonSigFDR,sig,sigDep,sigUp,notReg,StrictNonSig,stat_status,status2,status3,status,status5))
+  sigGenes_WVsNos <- subset(isoformsEdgeR_WVsNos,select=c(TrID,logFC,FDR,sigFDR,nonSigFDR,sig,sigDep,sigUp,notReg,StrictNonSig,stat_status,status2,status3,status,status5))
+  if (useOriginal){
+    sigGenes_WVsUpfNos <- subset(isoformsEdgeR_WVsUpfNos_org,select=c(TrID,logFC,FDR,sigFDR,nonSigFDR,sig,sigDep,sigUp,notReg,StrictNonSig,stat_status,status2,status3,status,status5))
+    sigGenes_WVsUNL7 <- subset(isoformsEdgeR_WVsUNL7_org,select=c(TrID,logFC,FDR,sigFDR,nonSigFDR,sig,sigDep,sigUp,notReg,StrictNonSig,stat_status,status2,status3,status,status5))
+  }
+  else {
+    sigGenes_WVsUpfNos <- subset(isoformsEdgeR_WVsUpfNos,select=c(TrID,logFC,FDR,sigFDR,nonSigFDR,sig,sigDep,sigUp,notReg,StrictNonSig,stat_status,status2,status3,status,status5))
+    sigGenes_WVsUNL7 <- subset(isoformsEdgeR_WVsUNL7,select=c(TrID,logFC,FDR,sigFDR,nonSigFDR,sig,sigDep,sigUp,notReg,StrictNonSig,stat_status,status2,status3,status,status5))
+  }
+  
+  colnames(sigGenes_WVsUpf) <- paste(colnames(sigGenes_WVsUpf),"_Upf",sep = "")
+  colnames(sigGenes_WVsNos) <- paste(colnames(sigGenes_WVsNos),"_Nos",sep = "")
+  colnames(sigGenes_WVsUpfNos) <- paste(colnames(sigGenes_WVsUpfNos),"_UpfNos",sep = "")
+  colnames(sigGenes_WVsUNL7) <- paste(colnames(sigGenes_WVsUNL7),"_UNL7",sep = "")
+  
+  # do not use 'keep all' because Upf and/or Nos data have more genes/transcripts in them as some are removed from UN/UNL7
+  rawCompleteGeneSet <- merge(merge(merge(sigGenes_WVsUpf,sigGenes_WVsNos,by = 1),
+                                    sigGenes_WVsUpfNos,by = 1),
+                              sigGenes_WVsUNL7,by = 1)
+  colnames(rawCompleteGeneSet)[c(1:8)] <- c("TrID","FBgnID","GeneName","avgTPM","logTPM","RNALength","log2RNALength","logCPM")
+  return(rawCompleteGeneSet)
+}
+
+####=======================================================+++
+####=======================================================+++
+#### Gene ID to Name #################### 
+
+geneID2name6_22_96_append <- function(inData, userownames=0,byCol="FBgnID")
+{
+  FBgnID_FBtrID_BDGP6_22_96_genes_only <- FBgnID_FBtrID_BDGP6_22_96[,-2]
+  FBgnID_FBtrID_BDGP6_22_96_genes_only <- FBgnID_FBtrID_BDGP6_22_96_genes_only[!duplicated(FBgnID_FBtrID_BDGP6_22_96_genes_only$FBgnID),]
+  
+  if(userownames==1)
+    print(paste("in and out have the same number of records:",nrow(inData)==nrow(merge(FBgnID_FBtrID_BDGP6_22_96_genes_only, inData, by.x="FBgnID", by.y=0))))
+  else
+    print(paste("in and out have the same number of records:",nrow(inData)==nrow(merge(FBgnID_FBtrID_BDGP6_22_96_genes_only, inData, by.x="FBgnID", by.y=byCol))))
+  
+  if(userownames==1)
+    return(merge(FBgnID_FBtrID_BDGP6_22_96_genes_only, inData, by.x="FBgnID", by.y=0))
+  else
+    return(merge(FBgnID_FBtrID_BDGP6_22_96_genes_only, inData, by.x="FBgnID", by.y=byCol))
+}
+
+
+geneID2name <- function(inIDs, noNA=FALSE){
+  inGeneName <- as.vector(fbgn_annotation_ID[as.character(inIDs),1])
+  if (noNA){
+    for (i in 1:length(inGeneName) )
+      if (is.na(inGeneName[i]))
+        inGeneName[i] <- inIDs[i]
+  }
+  return(inGeneName)
+}
+
+
+####=======================================================+++
+####=======================================================+++
+#### Formatting  ########################
+
+formatPercentage <- function(inX,inTotal){
+  return(paste(as.character(round( (100*nrow(inX))/nrow(inTotal),1)),"%",sep = ""))
+}
+
+RSeqStat <- function(inDataset, output_value=c("all","d","n","u","p"), percent=T,alphaValue=0.05,lfc=1){
+  output_value <- match.arg(output_value)
+  print(paste("output value is: ",output_value))
+  tmpSummary <- summary(de <- decideTestsDGE(inDataset,adjust.method = "BH", lfc=lfc, p=alphaValue)) 
+  if (percent){
+    if(output_value=="all"){
+      return(tmpSummary)
+    }
+    else if(output_value=="p"){
+      print(paste(as.character(round( (100*tmpSummary[1]/sum(tmpSummary)),1)),"%",sep = "")) #d
+      print(paste(as.character(round( (100*tmpSummary[2]/sum(tmpSummary)),1)),"%",sep = "")) #n
+      print(paste(as.character(round( (100*tmpSummary[3]/sum(tmpSummary)),1)),"%",sep = "")) #u
+      return(tmpSummary)
+    }
+    else if(output_value=="d"){
+      return(paste(as.character(round( (100*tmpSummary[1]/sum(tmpSummary)),1)),"%",sep = ""))
+    }
+    else if(output_value=="n"){
+      return(paste(as.character(round( (100*tmpSummary[2]/sum(tmpSummary)),1)),"%",sep = ""))
+    }
+    else if(output_value=="u"){
+      return(paste(as.character(round( (100*tmpSummary[3]/sum(tmpSummary)),1)),"%",sep = ""))
+    }
+  }
+  else
+    return(tmpSummary)
+}
+
+####=======================================================+++
+####=======================================================+++
+#### Extract genes  ########################
+
+# get top n genes, with more or equal to AbLFC, sig are the ones with FDR <= alpha, 
+xtrGenes <- function(inET=et,sig=0,AbLFC=1,top=0,inMethod="BH",inAlphaValue=0.05,strictNonSig=F,nonSiglFCCutoff=0.5,nonSigFDRCutoff=0.05,maxGeneNumberInDataset=70000,setSignificants=F){
+  print(paste("NOTE: AbLFC = ",AbLFC,". "))
+  totalGenes <- topTags(inET,adjust.method = inMethod,n = maxGeneNumberInDataset)$table
+
+  sigGenes <- totalGenes[totalGenes$FDR <= inAlphaValue,]
+  if (AbLFC!=0)
+    sigGenes <- sigGenes[(abs(sigGenes$logFC) >= AbLFC),]
+  
+  nonSigGenes <- totalGenes[!(rownames(totalGenes) %in% rownames(sigGenes)),]
+  if (strictNonSig )
+    nonSigGenes <- nonSigGenes[ (nonSigGenes$FDR >= nonSigFDRCutoff & abs(nonSigGenes$logFC) <= nonSiglFCCutoff),]
+  
+  downSigGenes <- sigGenes[sigGenes$logFC <= -(AbLFC),]
+  downSigGenes <- downSigGenes[order(downSigGenes$logFC),]
+  upSigGenes <- sigGenes[sigGenes$logFC>= AbLFC,]
+  upSigGenes <- upSigGenes[order(-upSigGenes$logFC),]
+  
+  if(sig== -1){     ##  Down-reg
+    xtrGenes <- downSigGenes[c(1:(if(top==0) nrow(downSigGenes) else top)),]
+  } else if(sig==0){ ##  Non-Sig
+    xtrGenes <- nonSigGenes[c(1:(if(top==0) nrow(nonSigGenes) else top)),]
+  } else if(sig==1){ ##  Up-reg
+    xtrGenes <- upSigGenes[c(1:(if(top==0) nrow(upSigGenes) else top)),]
+  } else if(sig==2){ ##  Significant
+    xtrGenes <- sigGenes[c(1:(if(0==0) nrow(sigGenes) else top)),]
+  } else if(sig==3){ ## Significant and Non-Sig
+    xtrGenes <- totalGenes[c(1:(if(top==0) nrow(totalGenes) else top)),]
+  }
+  if(setSignificants){
+    xtrGenes$sigFDR <- ifelse( xtrGenes$FDR <= inAlphaValue  ,T,F)
+    xtrGenes$nonSigFDR <- ifelse( xtrGenes$FDR > inAlphaValue  ,T,F)
+    xtrGenes$sig <- ifelse( xtrGenes$FDR <= inAlphaValue & abs(xtrGenes$logFC) >= AbLFC ,T,F)
+##    xtrGenes$nonSig <- !xtrGenes$sig                                                          ## in this setup now, this is identical to notReg
+    xtrGenes$sigDep <- ifelse( xtrGenes$FDR <= inAlphaValue & xtrGenes$logFC <= -(AbLFC) ,T,F)
+    xtrGenes$sigUp <- ifelse( xtrGenes$FDR <= inAlphaValue & xtrGenes$logFC >= AbLFC ,T,F)
+    xtrGenes$notReg <- ifelse( !xtrGenes$sigDep & !xtrGenes$sigUp ,T,F)                        ## in this setup now, this is identical to nonSig
+    xtrGenes$StrictNonSig <- ifelse( xtrGenes$FDR >= nonSigFDRCutoff & abs(xtrGenes$logFC) <= nonSiglFCCutoff ,T,F)
+    xtrGenes$stat_status <- ifelse( xtrGenes$FDR <= inAlphaValue,ifelse( xtrGenes$logFC < 0 ,"FDR_Depleted","FDR_Up_regulated") ,"FDR_nonSig")
+    xtrGenes$status2 <- ifelse( xtrGenes$sigDep ,"Depleted", "Not_Depleted")
+    xtrGenes$status3 <- ifelse( xtrGenes$sigDep ,"Depleted", ifelse(xtrGenes$sigUp,"Up_regulated","Not_Regulated"))
+    xtrGenes$status <- xtrGenes$status3
+    xtrGenes$status5 <- xtrGenes$status3
+    xtrGenes$status5 <- ifelse( xtrGenes$FDR <= inAlphaValue & xtrGenes$logFC < 0 & xtrGenes$logFC > -1 ,"Depleted_intermediate",
+                          ifelse( xtrGenes$FDR <= inAlphaValue & xtrGenes$logFC > 0 & xtrGenes$logFC < 1 ,"oUp_regulated_intermediate",xtrGenes$status)
+                          )
+  }
+  return(xtrGenes)
+}
+
+
+xtrGenesWithGeneIDasAcolumn <- function(inET=et,sig=0,AbLFC=1,top=0,inMethod="BH",inAlphaValue=0.05,strictNonSig=F,nonSiglFCCutoff=0.5,nonSigFDRCutoff=0.05,maxGeneNumberInDataset=70000,setSignificants=F,colIDName="geneID"){
+  xtrGenesWithGeneIDasAcolumn <- xtrGenes(inET,sig,AbLFC,top,inMethod,inAlphaValue,strictNonSig,nonSiglFCCutoff,nonSigFDRCutoff,maxGeneNumberInDataset,setSignificants)
+  xtrGenesWithGeneIDasAcolumn[[colIDName]] <- rownames(xtrGenesWithGeneIDasAcolumn)
+  xtrGenesWithGeneIDasAcolumn <- xtrGenesWithGeneIDasAcolumn[,c(ncol(xtrGenesWithGeneIDasAcolumn),1:(ncol(xtrGenesWithGeneIDasAcolumn)-1) )]
+  return(xtrGenesWithGeneIDasAcolumn)
+}
+
+
+
+####=======================================================+++
+####  Graphical Functions .... ###########
+
+makeggSmearPlot <- function(et_dataset, dataTags,markgenes,markSize=4,markCol="red",repel=F,repelForce=0.2,inYlim=c(-10,12.5),inXlim=c(-2,14),inLineCol="blue", inSize=18, pointSize1=0.5, pointSize2=0.5, intitle="",concatTitle=T,alphaValue=0.05){
+  library(ggplot2)
+  library(ggrepel)
+  if(concatTitle)
+    intitle <- paste("3rd-RNAseq: ",et_dataset[[2]][[1]], "_vs_",et_dataset[[2]][[2]], " ", intitle ,sep="")
+  if(missing(dataTags))
+    dataTags <- rownames(y)[as.logical(decideTestsDGE(et_dataset, adjust.method = "BH", p=alphaValue))]
+  else if (length(dataTags) == 1)
+    if (identical(dataTags,FALSE)) dataTags <- NULL
+  et_dataset <- as.data.frame(et_dataset[[1]])
+  et_dataset$geneID <- rownames(et_dataset)
+  mainplot <- ggplot(et_dataset, aes(logCPM, logFC))+ggtitle(intitle)+
+    ylim(inYlim)+xlim(inXlim)+theme_bw()+theme(plot.title = element_text(hjust = 0.5),text = element_text(size=inSize))+
+    xlab(expression("log"[2]*" (Counts per Million Reads)"))+ylab(expression("log"[2]*" (Fold Change)"))+
+    geom_point(size=pointSize1, col="black")
+  if(!is.null(dataTags))
+    mainplot <- mainplot + geom_point(data = et_dataset[et_dataset$geneID %in% dataTags,],col="red", size=pointSize2 )
+  
+  if(!missing(markgenes)){
+    if(repel){
+      mainplot <- mainplot + geom_text_repel(aes(label=ifelse(geneID %in% markgenes ,as.character(geneID2name(geneID)),'')),force = repelForce, size=markSize, col=markCol)
+    }
+    else{
+      mainplot <- mainplot + geom_text(aes(label=ifelse(geneID %in% markgenes ,as.character(geneID2name(geneID)),'')), size=markSize, col=markCol)
+    }
+  }
+  mainplot <- mainplot+geom_hline(yintercept = c(-1,1),col=inLineCol, size=0.5)
+  mainplot
+  return(mainplot)
+}
+
+
+
+
+
+fasta2dataframe_3UTR_split_with_underline <- function(fastaFilePath){
+  library("Biostrings")
+  fastaFile <-  readDNAStringSet(fastaFilePath)
+  TrID <-  names(fastaFile)
+  FBgnID <- unlist(strsplit(TrID,"_"))[2*(1:length(TrID))-1]
+  TrID <- unlist(strsplit(TrID,"_"))[2*(1:length(TrID))]
+  thUTRSeq  <- paste(fastaFile)
+  thUTRSeqLength  <- nchar(fastaFile)
+  return(data.frame(TrID,thUTRSeq,thUTRSeqLength,FBgnID,stringsAsFactors = F))
+}
+
+fasta2dataframe_CDS <- function(fastaFilePath){
+  library("Biostrings")
+  fastaFile <-  readDNAStringSet(fastaFilePath)
+  TrID <-  names(fastaFile)
+  GeneName <- sub(pattern = ".*name=(.*?);.*", replacement = "\\1", x = TrID,ignore.case = T,)
+  FBgnID <- sub(pattern = ".*parent=(.*?),.*", replacement = "\\1", x = TrID,ignore.case = T,)
+  TrID <- sub(pattern = ".*parent=.*,(.*?);.*", replacement = "\\1", x = TrID,ignore.case = T,)
+  CDSSeq  <- paste(fastaFile)
+  CDSSeqLength  <- nchar(fastaFile)
+  return(data.frame(TrID,CDSSeq,CDSSeqLength,FBgnID,GeneName,stringsAsFactors = F))
+}
+
+set0ForNotFinding <- function(x){
+  if (length(x) ==1) 
+    if (is.na(x)){
+      return(0)
+    }
+    else{
+      if(x== -1) 
+        return(0)
+    }
+  return(length(x))
+}
+
+findColumnIndex <- function(inDB,inCol){
+  if(!is.numeric(inCol)){
+    inCol <- which(colnames(inDB) == inCol)[1]
+  }
+  return(inCol)
+}
+
+findSetOneMotifInSeqs <- function(in3UTR,inSiteName,inSiteSeq,seqColumn="thUTRSeq",geneIDColumn="FBgnID", setGeneIsoformsInfo=T, sitePerKbLim=-1,
+                                  ReportInSiteNamePosition=F,ReportInSiteNameVecPosition=F,notFindingCoeff=1,useNegativeForNotFinding=F,windowSize=10,inSiteLength=7){
+  print("findSetOneMotifInSeqs")
+  seqColIndex <- findColumnIndex(in3UTR,seqColumn)
+  aggByColIndex <- findColumnIndex(in3UTR,geneIDColumn)
+
+  seqLengthCol <- paste0(seqColumn,"Length")
+  print(paste("searching for", inSiteName," : ",  inSiteSeq))
+  inSiteNamePosition <- paste("position",inSiteName,sep="")
+  inSiteNameVecPosition <- paste("VecPosition",inSiteName,sep="")
+  inSiteNameNumberOf <- paste("numberOf",inSiteName,sep="")
+  inSitePerKb <- paste(inSiteName,"PerKb",sep="")
+  inSiteNameIsoWith <- paste("IsoWith",inSiteName,sep="")
+  inSiteNameGeneWith <- paste("GeneWith",inSiteName,sep="")
+  inSiteNameAdjacent <- paste("Adjacent",inSiteName,sep="")
+
+  in3UTR[[inSiteNameVecPosition]] <- gregexpr(inSiteSeq,in3UTR[,seqColIndex], ignore.case =T)
+  in3UTR[[inSiteNameNumberOf]] <- sapply(in3UTR[[inSiteNameVecPosition]],FUN = set0ForNotFinding)
+  
+  # extract adjacent sequences
+  print(paste("Extract adjacent sequences for", inSiteName))
+  in3UTR[[inSiteNameAdjacent]] <- apply(in3UTR,MARGIN = 1,FUN = function(inRow){
+    vecPosi <- inRow[[inSiteNameVecPosition]]
+    compAdjacent <- ""
+    for(ind in c(1:length(vecPosi))){
+      if(vecPosi[ind]>0){
+        if(nchar(compAdjacent) > 1)
+          compAdjacent <- paste(compAdjacent,substr(inRow[seqColIndex],vecPosi[ind]-windowSize,vecPosi[ind]+inSiteLength+windowSize-1),sep = ";")
+        else
+          compAdjacent <- substr(inRow[seqColIndex],vecPosi[ind]-windowSize,vecPosi[ind]+inSiteLength+windowSize-1)
+      }
+    }
+    return(compAdjacent)
+  })
+  
+  in3UTR[[inSitePerKb]] <- (1000*in3UTR[[inSiteNameNumberOf]])/in3UTR[[seqLengthCol]] #in3UTR$thUTRSeqLength
+
+  notFindingCoeff <- round(1000*sum(in3UTR[[inSiteNameNumberOf]])/sum(in3UTR[[seqLengthCol]]) ,2)
+  print(paste0("Average Number Site: ",notFindingCoeff," per 1kb"))
+  # calc based on length, give negative to no finding based on average num (-1 for not finding it per average of 3UTR), default of notFindingCoeff is 1
+  
+  if(useNegativeForNotFinding)
+    in3UTR[[inSitePerKb]] <- ifelse(in3UTR[[inSiteNameNumberOf]]>0,(1000*in3UTR[[inSiteNameNumberOf]])/in3UTR[[seqLengthCol]],-(notFindingCoeff*(in3UTR[[seqLengthCol]]/1000)))
+
+  
+  in3UTR[[inSiteNameIsoWith]] <- (in3UTR[[inSiteNameNumberOf]] > 0)
+  
+  if (sitePerKbLim[1] != -1){
+    in3UTR[[inSiteNameIsoWith]] <- in3UTR[[inSitePerKb]] >= sitePerKbLim
+    print(paste("Using sitePerKbLim=",sitePerKbLim))
+  }
+
+  if(setGeneIsoformsInfo){
+    print("setting Genes' Isoforms Info")
+    
+    # calculate whether a gene has the site or not
+    # if more than 50% of isoforms from the gene has the site, then the gene has the site!!!  
+    tempGLsitePosition <-  aggregate(in3UTR[inSiteNameVecPosition],by = list(in3UTR[,aggByColIndex]),FUN = function(isoforms){
+      # is more than one 3UTR seq available?
+      if (length(isoforms) >1){
+        # are they exactly the same as teh first one? (position of PRE), if so, check the 1st isoform
+        if (all(sapply(isoforms, FUN = identical, isoforms[[1]]))){
+          return(isoforms[[1]][1] != "-1")
+        }
+        else{
+          # are there any without PRE?
+          if(Position(function(x) {x[[1]]==-1}, isoforms, nomatch = 0) > 0){
+            isoforms <- sapply(isoforms,FUN = function(inPositions){return(inPositions[[1]]!= -1)})
+            percentageOfIsoformsWithSite <- 100*length(which(isoforms == TRUE))/length(isoforms)
+            
+            # if more than 50% of isoforms from the gene has the sire, then the gene has the site!!!  
+            if(percentageOfIsoformsWithSite>50)
+              return(TRUE)
+            else
+              return(FALSE)
+          }
+          else{
+            return(TRUE)
+          }
+        }
+      }
+      # if there is just on isoform, check it for the presence of the query site
+      else
+        return(isoforms[[1]][1]!= "-1")
+    } )
+    colnames(tempGLsitePosition)[2] <- inSiteNameGeneWith
+    
+    # calculate the percentage of which a gene has the site based on the isoforms (unique seq?) 
+    tempGLisoformWithSitePercentage <-  aggregate(in3UTR[inSiteNameVecPosition],by = list(in3UTR[,aggByColIndex]),FUN = function(isoforms){
+      if (length(isoforms) >1){
+        # are they exactly the same as the first one? (position of PRE), if so, check the 1st isoform
+        if (all(sapply(isoforms, FUN = identical, isoforms[[1]])))
+          return(ifelse(isoforms[[1]][1]== -1,0,100))
+        else{
+          # this includes genes with some isoforms bearing the site and some not AND genes that some isoforms has more sites than the others
+          # Reformat to T or F (T= has the site, -1==F) then calculate teh percentage of having site
+          isoforms <- sapply(isoforms,FUN = function(inPositions){return(inPositions[[1]]!= -1)})
+          return(round(100*length(which(isoforms == TRUE))/length(isoforms),0))
+        }
+      }
+      # if there is just on isoform, check it for the presence of the query site
+      else
+        return(ifelse(isoforms[[1]][1]== -1,0,100))
+    } )
+    colnames(tempGLisoformWithSitePercentage)[2] <- paste("prcntIsoWith",inSiteName,sep="")
+
+    in3UTR <- merge(in3UTR,tempGLsitePosition,by.x=aggByColIndex,by.y=1,all.x=T)
+    in3UTR <- merge(in3UTR,tempGLisoformWithSitePercentage,by=1,all.x=T)
+  }
+  if(ReportInSiteNamePosition)
+    in3UTR[[inSiteNamePosition]] <- sapply(in3UTR[[inSiteNameVecPosition]],function(x){paste(x,collapse = ",")})
+  
+  print(paste(inSiteName," (", inSiteSeq, ") found in :", nrow(in3UTR[in3UTR[[inSiteNameIsoWith]]==T,]) , " transcripts, ", round(nrow(in3UTR[in3UTR[[inSiteNameIsoWith]]==T,])*100/nrow(in3UTR),1) , " %"))
+  if (!ReportInSiteNameVecPosition) {
+    in3UTR[[inSiteNameVecPosition]] <- NULL
+    in3UTR[[inSiteNameGeneWith]] <- NULL
+    in3UTR[[paste("prcntIsoWith",inSiteName,sep="")]] <- NULL
+  }
+  
+  return(in3UTR)
+}
+
+
+# mergeWith, mergeBy and aggBy are required only for multipleUTRsPerGene
+utr_findSetPREsites <- function(in3UTR, inSiteSeqNames="TGTA_Site",inSiteSeqs="TGTA",geneIDColumn="FBgnID",setGeneIsoformsInfo=T,seqColumn="thUTRSeq",
+                                useLoosePRE=F,sitePerKbAsVector=-1,useNegativeForNotFinding=F,ReportInSiteNameVecPosition=F,ReportInSiteNamePosition=F){
+  print("utr_findSetPREsites")
+  print("Genes than 50% of thier isoforms has the site are consider to bear the site at the  geneLevel!")
+  loosePREseq <- "TGTA(A|T|C)(A|T)T(A|T)"  # 8 nt, UGUAHWTW
+  corePREseq <- "TGTA(A|T|C)ATA"   # 8 nt, UGUAHHDA
+  
+  if(useLoosePRE){
+    print(paste("searching for loosePRE : ", loosePREseq,", & ", paste(inSiteSeqNames,collapse = " & ") , ", = ", paste(inSiteSeqs,collapse = ", & ")))
+    in3UTR <- findSetOneMotifInSeqs(in3UTR,inSiteName = "PRE",inSiteSeq = NBSPREseq,seqColumn = seqColumn,geneIDColumn = geneIDColumn,setGeneIsoformsInfo = setGeneIsoformsInfo,sitePerKbLim=sitePerKbAsVector[1],ReportInSiteNameVecPosition=ReportInSiteNameVecPosition,useNegativeForNotFinding=useNegativeForNotFinding,ReportInSiteNamePosition=ReportInSiteNamePosition)
+  }
+  else{
+    print(paste("searching for PRE : ", corePREseq,", & ", paste(inSiteSeqNames,collapse = " & ") , ", = ", paste(inSiteSeqs,collapse = ", & ")))
+    in3UTR <- findSetOneMotifInSeqs(in3UTR,inSiteName = "PRE",inSiteSeq = corePREseq,seqColumn = seqColumn,geneIDColumn = geneIDColumn,setGeneIsoformsInfo = setGeneIsoformsInfo,sitePerKbLim=sitePerKbAsVector[1],ReportInSiteNameVecPosition=ReportInSiteNameVecPosition,useNegativeForNotFinding=useNegativeForNotFinding,ReportInSiteNamePosition=ReportInSiteNamePosition)
+  }  
+  
+  if(length(sitePerKbAsVector)> 1){
+    print("Yaaay")
+    for(siteIndex in c(1:length(inSiteSeqs))){
+      in3UTR <- findSetOneMotifInSeqs(in3UTR,inSiteName = inSiteSeqNames[siteIndex],inSiteSeq = inSiteSeqs[siteIndex],seqColumn = seqColumn,geneIDColumn = geneIDColumn,setGeneIsoformsInfo = setGeneIsoformsInfo,sitePerKbLim=sitePerKbAsVector[siteIndex+1],ReportInSiteNameVecPosition=ReportInSiteNameVecPosition,useNegativeForNotFinding=useNegativeForNotFinding,ReportInSiteNamePosition=ReportInSiteNamePosition)
+    }
+  }
+  else{
+    for(siteIndex in c(1:length(inSiteSeqs))){
+      in3UTR <- findSetOneMotifInSeqs(in3UTR,inSiteName = inSiteSeqNames[siteIndex],inSiteSeq = inSiteSeqs[siteIndex],seqColumn = seqColumn,geneIDColumn = geneIDColumn,setGeneIsoformsInfo = setGeneIsoformsInfo,sitePerKbLim=-1,ReportInSiteNameVecPosition=ReportInSiteNameVecPosition,useNegativeForNotFinding=useNegativeForNotFinding,ReportInSiteNamePosition=ReportInSiteNamePosition)
+    }
+  }
+  return(in3UTR)
+}
+
+```
+
+
+
+## --------------------------
+## Normalization Function
+
+Normalization to Highly Expressed gn/tr 
+Normalization to Highly Expressed Genes ,  I used top 20, check the end of this function
+the input need to be a matrix of numbers
+do not use TPM, as it has already been normalized once!
+
+```{r Normalization_Function....}
+#### Normalization to Highly Expressed gn/tr  ########################
+
+normalization_factor_from_highley_expressed_genes <- function(inDataset, noGraph=T, mostAbundantRankCutoff=30,useLwrUprBoundaries=F, lowerBoundary=5,upperBoundary=20, onlyReportUN=T,lbl="Genes"){
+  ##  find the top 100 expressed genes and record the rankings
+  ## lowerBoundary the minimum number of genes to be in a select to calculate the ratio
+  ## upperBoundary the maximum number of genes to be in a select to calculate the ratio
+  
+  # calculate cpm of the top genes or isoforms
+  countPerMil <- as.data.frame(cpm(inDataset,lib.size = colSums(inDataset),normalized.lib.sizes = T, log = F))
+  
+  topXgenes <- 500    # start with 500 genes or isoforms
+  temp <- t(apply(countPerMil, 1, function(eachRow){c(mean(eachRow[1:3]),mean(eachRow[4:6]),mean(eachRow[7:9]),mean(eachRow[10:12]),mean(eachRow[13:15]))}))
+  colnames(temp) <- c("Upf","Nos","UpfNos","UpfNosL7","W")
+  temp <- as.data.frame(temp)
+  temp$names <- rownames(temp)
+  temp <- temp[,c(6,1:5)]
+  upf <- tail(temp[order(temp$Upf),],topXgenes)[,c(1,2)]
+  nos <- tail(temp[order(temp$Nos),],topXgenes)[,c(1,3)]
+  upfNos <- tail(temp[order(temp$UpfNos),],topXgenes)[,c(1,4)]
+  UNL7 <- tail(temp[order(temp$UpfNosL7),],topXgenes)[,c(1,5)]
+  W <- tail(temp[order(temp$W),],topXgenes)[,c(1,6)]
+  
+  upf$Upf <- c(topXgenes:1)
+  nos$Nos <- c(topXgenes:1)
+  upfNos$UpfNos <- c(topXgenes:1)
+  UNL7$UpfNosL7 <- c(topXgenes:1)
+  W$W <- c(topXgenes:1)
+  
+  oneMergedData <- merge(merge(merge(merge(upf,nos,by.x = 1,by.y = 1,all.x = T,all.y = T),
+                                     upfNos,by.x = 1,by.y = 1,all.x = T,all.y = T),
+                               UNL7,by.x = 1,by.y = 1,all.x = T,all.y = T),
+                         W,by.x = 1,by.y = 1,all.x = T,all.y = T)
+
+  #### process: make one data set based on CMP but ranked by mean abundance in W,         
+  #### (started with top 500 genes of each samples, merge them, rank them based on abundance in W (mean), )
+  #### get the top n (used 30) most abundant genes in both W AND UpfNos. Needs to be top in both! 
+    ## get the genes that are in the top 30 of W AND UpfNos, (this will discarding the genes that are higheyly abundant in W but are not higheyly abundant in UpfNos! fine)
+  #### calculate the ratio of CPM in UpfNos to control (mean CPM of 3 W samples)
+    # I have used mean of CPM to calculate the control CMP (W samples),
+  #### Calculate a mean ratio for groups of 5 to 20 (lowerBoundary to upperBoundary) with 1 increment
+      # use this average of these mean ratios to correct normalization factors in edgeR
+  
+  
+  # removing me31B gene "FBgn0004419" and transcript  "FBtr0079975"
+  oneMergedData <- oneMergedData[oneMergedData$names != "FBgn0004419",] # removing me31B gene
+  oneMergedData <- oneMergedData[oneMergedData$names != "FBtr0079975",] # removing me31B transcript
+  
+  # removing cycB gene "FBgn0000405" and transcript  "FBtr0071911"
+  oneMergedData <- oneMergedData[oneMergedData$names != "FBgn0000405",] # removing cycB gene
+  oneMergedData <- oneMergedData[oneMergedData$names != "FBtr0071911",] # removing cycB transcript
+
+  # Just W and Upf Nos, to get the ratio ,
+  colnames(oneMergedData)[-1] <- paste(colnames(oneMergedData[-1]),"rank",sep = "_")
+  oneMergedData <- oneMergedData[order(oneMergedData$W_rank),]
+  oneMergedData <- oneMergedData[(!is.na(oneMergedData$W_rank) & !is.na(oneMergedData$UpfNos_rank)),]
+  oneMergedData <- oneMergedData[(oneMergedData$W_rank < mostAbundantRankCutoff) & (oneMergedData$UpfNos_rank < mostAbundantRankCutoff ),]
+  if(useLwrUprBoundaries & (nrow(oneMergedData)<upperBoundary)){
+    print(paste0("ERROR: use a higher number of genes. With this threshold we get: ",nrow(oneMergedData)))
+    return(NA)
+  }
+
+  temp <- merge(temp[,c(1,6)], countPerMil[,1:12], by.x=0, by.y=0)
+  temp$Row.names <- NULL
+  temp <- merge(temp,oneMergedData[,c(1,6)], by.x=1, by.y=1,all.y=T,)
+  rownames(temp) <- temp$names
+  temp$names <- NULL
+  colnames(temp) <- c("wMeanCPM","Upf1","Upf2","Upf3","Nos1","Nos2","Nos3","UpfNos1","UpfNos2","UpfNos3","UpfNosL71","UpfNosL72","UpfNosL73","W_rank")
+  
+  temp$diff_Upf_1 <- temp$Upf1/temp$wMeanCPM
+  temp$diff_Upf_2 <- temp$Upf2/temp$wMeanCPM
+  temp$diff_Upf_3 <- temp$Upf3/temp$wMeanCPM
+  
+  temp$diff_Nos_1 <- temp$Nos1/temp$wMeanCPM
+  temp$diff_Nos_2 <- temp$Nos2/temp$wMeanCPM
+  temp$diff_Nos_3 <- temp$Nos3/temp$wMeanCPM
+  
+  temp$diff_UpfNos_1 <- temp$UpfNos1/temp$wMeanCPM
+  temp$diff_UpfNos_2 <- temp$UpfNos2/temp$wMeanCPM
+  temp$diff_UpfNos_3 <- temp$UpfNos3/temp$wMeanCPM
+  
+  temp$diff_UNL7_1 <- temp$UpfNosL71/temp$wMeanCPM
+  temp$diff_UNL7_2 <- temp$UpfNosL72/temp$wMeanCPM
+  temp$diff_UNL7_3 <- temp$UpfNosL73/temp$wMeanCPM
+  
+  temp <- temp[order(temp$W_rank),]
+  
+  if(useLwrUprBoundaries==FALSE){
+    if (noGraph){
+      print(paste("n row = ", nrow(temp)))
+      if(onlyReportUN){
+        print(colMeans(temp[,(21:23)]))
+        return(colMeans(temp[,(21:23)]))
+      }
+      else{
+        print(colMeans(temp[,-(1:14)]))
+        return(temp)
+      }
+    }
+    else
+    {
+      print("making a Graph")
+      library(stringr)
+      ####========= the figure to assess the limit ===========================================+++
+      result <- vector()
+      for( i in seq(from = 1,to = nrow(temp),by = 1))
+        result <- c(result,colMeans(temp[1:i,-(1:14)]))
+      result <- as.data.frame(matrix(result,ncol = 12,byrow = T))
+      colnames(result) <- c("Upf1","Upf2","Upf3","Nos1","Nos2","Nos3","UpfNos1","UpfNos2","UpfNos3","UpfNosL71","UpfNosL72","UpfNosL73")
+      result$index <- c(1:nrow(result))
+      
+      library("reshape2")
+      library("ggplot2")
+      tmpPlot <- ggplot(data=melt(result, id="index")) +geom_line(aes(x=index, y=value, group=variable,colour=str_replace(variable,"\\d$",""))  )+
+        xlab(paste0("Rank (Top ",lbl,")"))+ylab("Normalization Value")+theme(panel.grid.minor =element_blank(),legend.position = "top",legend.title = element_blank())
+      print(tmpPlot)
+      return(tmpPlot)
+    }
+  }
+  else{
+    library(tidyverse)
+    temp$topN <- c(1:nrow(temp))
+    tempOnlyRatios <- temp[1:upperBoundary,c(15:27)]
+    avgTopN <- list(c(NA),c(NA),c(NA),c(NA),c(NA),c(NA),c(NA),c(NA),c(NA),c(NA),c(NA),c(NA))
+    for( topRows in seq(lowerBoundary,to = nrow(tempOnlyRatios),by = 1)){
+      for (i in c(1:12))
+      {
+        avgTopN[[i]] <- c(avgTopN[[i]],mean(tempOnlyRatios[1:topRows,i]))
+      }
+    }
+    tmpDataset_avgVals <- as.data.frame(avgTopN, col.names=c("Upf1","Upf2","Upf3","Nos1","Nos2","Nos3","UpfNos1","UpfNos2","UpfNos3","UpfNosL71","UpfNosL72","UpfNosL73"))
+    tmpDataset_avgVals <- tmpDataset_avgVals[-1,]
+    tmpDataset_avgVals$topN <- c(lowerBoundary:(nrow(tmpDataset_avgVals)+lowerBoundary-1))
+  
+    if(!noGraph){
+      print("making a Graph")
+        library("ggplot2")
+        normPlots <- ggplot(data=gather(tmpDataset_avgVals,"Upf1","Upf2","Upf3","Nos1","Nos2","Nos3","UpfNos1","UpfNos2","UpfNos3","UpfNosL71","UpfNosL72","UpfNosL73",key="sample",value = "normVal"))+geom_line(aes(x=topN, y=normVal, group=sample,colour=str_replace(sample,"\\d$","")))+labs(color='Genotype') 
+  
+      print(normPlots)
+    }
+     print(paste("n row = ", nrow(temp)))
+  if(onlyReportUN)
+    return(colMeans(tmpDataset_avgVals)[7:9])
+  else
+    return(colMeans(tmpDataset_avgVals))
+  }
+ 
+}
+
+
+```
+
+
+# --------------------------
+# Gene Expression 
+Read output data of RSEM package.
+
+```{r gene_level:read_Data}
+
+genesRSEM_TPM <- read.table(file="Data/readcounts_gene/45_RSEM_ENSMBL_6_22_96_genes_TPM_matrix.txt",stringsAsFactors = F) # 17K (17,714) genes
+colnames(genesRSEM_TPM) <- unlist(strsplit(colnames(genesRSEM_TPM),".genes.results"))
+colnames(genesRSEM_TPM) <- paste(unlist(strsplit(colnames(genesRSEM_TPM),"RW"))[seq(2,30,2)],"TPM",sep="_")
+genesRSEM_TPM$avgTPM <- rowMeans(genesRSEM_TPM)
+genesRSEM_TPM$logTPM <- log(genesRSEM_TPM$avgTPM+0.1,2)
+
+genesRSEM_TPM <- geneID2name6_22_96_append(genesRSEM_TPM,1)
+rownames(genesRSEM_TPM) <- genesRSEM_TPM$FBgnID
+genesRSEM_TPM$FBgnID <- NULL
+genesRSEM_TPM <- genesRSEM_TPM[,c(2:18,1)]
+
+genesRSEM <- read.table(file="Data/readcounts_gene/45_RSEM_ENSMBL_6_22_96_genes_counts_matrix.txt",stringsAsFactors = F) # 17K (17,714) genes
+colnames(genesRSEM) <- unlist(strsplit(colnames(genesRSEM),".genes.results"))
+colnames(genesRSEM) <- unlist(strsplit(colnames(genesRSEM),"RW"))[seq(2,30,2)]
+genesRSEM <- geneID2name6_22_96_append(genesRSEM,1)
+rownames(genesRSEM) <- genesRSEM$FBgnID
+genesRSEM <- genesRSEM[,c(1,3:17,2)]
+
+maternal_genes_onlyINwSamples <- as.matrix(genesRSEM[,c(14:16)])
+maternal_genes_onlyINwSamples <- as.data.frame(maternal_genes_onlyINwSamples[filterByExpr(maternal_genes_onlyINwSamples, group=factor(c(rep("W",3))),min.count = 30,min.total.count = 30),])
+maternal_genes_onlyINwSamples <- genesRSEM[genesRSEM$FBgnID %in% rownames(maternal_genes_onlyINwSamples),-c(2:13)]
+
+```
+
+## Use edgeR:
+now use edgeR
+```{r gene_level:use_edgeR}
+
+# library("edgeR")
+alphaValue <- 0.05
+RNASeq_group <- factor(c(rep("Upf",3),rep("Nos",3),rep("UpfNos",3),rep("UpfNosL7",3),rep("W",3)))
+genesMatrix <- as.matrix(genesRSEM[,c(2:16)])
+genesMatrix <- genesMatrix[filterByExpr(genesMatrix, group=RNASeq_group,min.count = 30,min.total.count = 30),] # this is roughly equal to 2CPM in this data
+Expressed_genesRSEM <- genesRSEM[rownames(genesMatrix),]
+
+gns_y <- DGEList(counts=genesMatrix,group=RNASeq_group) 
+gns_y <- calcNormFactors(gns_y,logratioTrim=.4)
+
+gns_y$samples$norm.factors[7:9] <- normalization_factor_from_highley_expressed_genes(as.matrix(Expressed_genesRSEM[,2:16]),onlyReportUN = T,mostAbundantRankCutoff = 30)
+gns_y <- estimateCommonDisp(gns_y,verbose = T)
+gns_y <- estimateTagwiseDisp(gns_y,verbose = T)
+gns_countPerMil <- as.data.frame(cpm(gns_y, log =F))
+
+gnset_WVsUpfNos <- exactTest(gns_y, pair = c("W","UpfNos"))
+gnset_WVsUNL7 <- exactTest(gns_y, pair = c("W","UpfNosL7"))
+gnset_WVsUpf <- exactTest(gns_y, pair = c("W","Upf"))
+gnset_WVsNos <- exactTest(gns_y, pair = c("W","Nos"))
+
+
+```
+
+## Create DBs:
+create DB
+Removed all Upf1 regulated genes and transcripts from UN and UNL7 but kept Nos regulated genes/transcripts as majority of them fall in notRegulated categories in UN and UNL7
+```{r gene_level:create_DB}
+
+# Upf
+gnsRSEMEdgeR_WVsUpf <- xtrGenesWithGeneIDasAcolumn(gnset_WVsUpf,3,setSignificants = T,colIDName = "FBgnID")
+gnsRSEMEdgeR_WVsUpf <- merge(gnsRSEMEdgeR_WVsUpf,genesRSEM[,-c(2:16)],by=1)
+gnsRSEMEdgeR_WVsUpf <- merge(gnsRSEMEdgeR_WVsUpf,genesRSEM_TPM[,c(16,17)],by.x=1,by.y=0,all.x=T)
+# 277 genes are sig reg by Upf alone, #nrow(gnsRSEMEdgeR_WVsUpf[gnsRSEMEdgeR_WVsUpf$sig,])
+
+# Nos
+gnsRSEMEdgeR_WVsNos <- xtrGenesWithGeneIDasAcolumn(gnset_WVsNos,3,setSignificants = T,colIDName = "FBgnID")
+gnsRSEMEdgeR_WVsNos <- merge(gnsRSEMEdgeR_WVsNos,genesRSEM[,-c(2:16)],by=1)
+gnsRSEMEdgeR_WVsNos <- merge(gnsRSEMEdgeR_WVsNos,genesRSEM_TPM[,c(16,17)],by.x=1,by.y=0,all.x=T)
+
+# Upf-Nos
+gnsRSEMEdgeR_WVsUpfNos <- xtrGenesWithGeneIDasAcolumn(gnset_WVsUpfNos,3,setSignificants = T,colIDName = "FBgnID")
+gnsRSEMEdgeR_WVsUpfNos <- merge(gnsRSEMEdgeR_WVsUpfNos,genesRSEM[,-c(2:16)],by=1)
+gnsRSEMEdgeR_WVsUpfNos <- merge(gnsRSEMEdgeR_WVsUpfNos,genesRSEM_TPM[,c(16,17)],by.x=1,by.y=0,all.x=T)
+
+gnsRSEMEdgeR_WVsUpfNos_org <- gnsRSEMEdgeR_WVsUpfNos
+gnsRSEMEdgeR_WVsUpfNos <- subset(gnsRSEMEdgeR_WVsUpfNos, !(FBgnID %in% subset(gnsRSEMEdgeR_WVsUpf, sig)$FBgnID)) # 277 genes are removed as they are regulated by Upf alone.
+
+# UNL7
+gnsRSEMEdgeR_WVsUNL7 <- xtrGenesWithGeneIDasAcolumn(gnset_WVsUNL7,3,setSignificants = T,colIDName = "FBgnID")
+gnsRSEMEdgeR_WVsUNL7 <- merge(gnsRSEMEdgeR_WVsUNL7,genesRSEM[,-c(2:16)],by=1)
+gnsRSEMEdgeR_WVsUNL7 <- merge(gnsRSEMEdgeR_WVsUNL7,genesRSEM_TPM[,c(16,17)],by.x=1,by.y=0,all.x=T)
+gnsRSEMEdgeR_WVsUNL7_org <- gnsRSEMEdgeR_WVsUNL7
+gnsRSEMEdgeR_WVsUNL7 <- subset(gnsRSEMEdgeR_WVsUNL7, !(FBgnID %in% subset(gnsRSEMEdgeR_WVsUpf, sig)$FBgnID)) # 277 genes are removed as they are regulated by Upf alone.
+
+
+```
+
+## check the graphs for UpfNos and L7
+```{r gene_level:checkGraphs}
+
+RSeqStat(gnset_WVsUpfNos,"p", alphaValue=0.01)
+summary(de <- decideTestsDGE(gnset_WVsUpfNos,adjust.method = "BH", lfc=1, p=0.01))
+summary(de <- decideTestsDGE(gnset_WVsUpfNos,adjust.method = "BH", p=0.01))
+plotSmear(gnset_WVsUpfNos, de.tags=rownames(gns_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue") 
+title("Genes: W_vs_UpfNos")   # total = 6857
+
+
+RSeqStat(gnset_WVsUpfNos,"p")
+summary(de <- decideTestsDGE(gnset_WVsUpfNos,adjust.method = "BH", lfc=1, p=alphaValue))
+summary(de <- decideTestsDGE(gnset_WVsUpfNos,adjust.method = "BH", p=alphaValue))
+plotSmear(gnset_WVsUpfNos, de.tags=rownames(gns_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue") 
+title("Genes: W_vs_UpfNos")   # total = 6857
+
+
+RSeqStat(gnset_WVsUNL7,"p")
+summary(de <- decideTestsDGE(gnset_WVsUNL7,adjust.method = "BH", lfc=1, p=alphaValue))
+summary(de <- decideTestsDGE(gnset_WVsUNL7,adjust.method = "BH", p=alphaValue))
+plotSmear(gnset_WVsUNL7, de.tags=rownames(gns_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue") 
+title("Genes: W_vs_UpfNosL7")  # total = 7115
+
+
+RSeqStat(gnset_WVsUpf,"p")
+summary(de <- decideTestsDGE(gnset_WVsUpf,adjust.method = "BH", lfc=1, p=alphaValue))
+summary(de <- decideTestsDGE(gnset_WVsUpf,adjust.method = "BH", p=alphaValue))
+plotSmear(gnset_WVsUpf, de.tags=rownames(gns_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue") 
+title("Genes: W_vs_Upf")     # total = 7115
+
+
+RSeqStat(gnset_WVsNos,"p")
+summary(de <- decideTestsDGE(gnset_WVsNos,adjust.method = "BH", lfc=1, p=alphaValue))
+summary(de <- decideTestsDGE(gnset_WVsNos,adjust.method = "BH", p=alphaValue))
+plotSmear(gnset_WVsNos, de.tags=rownames(gns_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue") 
+title("Genes: W_vs_Nos")     # total = 7115
+
+
+```
+
+## qPCR validation
+```{r gene_level:qPCR_Validation,  results='asis', fig.asp=1}
+library(ggpubr)
+library(ggsci)
+library(openxlsx)
+library(ggrepel)
+qPCR_palette <- c("#0072B2","#374E55FF","#D55E00") 
+qPCR_Data <- read.csv("Data/6_Tested_genes_6_qPCR.csv", header = T)
+
+
+temp_CPM <- gnsRSEMEdgeR_WVsUpfNos
+temp_CPM <- temp_CPM[temp_CPM$GeneName %in% qPCR_Data$geneName,]
+temp_CPM <- temp_CPM[,c(2, 18)]
+qPCR_Data <- merge(qPCR_Data,temp_CPM, by.x =4, by.y=2)
+colnames(qPCR_Data)[6] <- "old_RNASeq_FC"
+colnames(qPCR_Data)[9] <- "RNASeq_FC"
+write.csv(qPCR_Data,file = "qPCR_genes.csv",quote = F)
+
+
+# make custom geom with red as default
+theme_set(theme_bw(base_size = 18))
+qPCRScatterPlot <- ggscatter(qPCR_Data,x="qPCR_ddCT",y = "RNASeq_FC",color="status", add = "reg.line",
+          title="qPCR Validation", add.params = list(color = "#20854EFF",linetype = "dashed"), label = "geneName", repel = TRUE ) +
+  scale_colour_manual(name="Status",labels = c("Depleted","Nonsignificant", "Enriched"),  values=qPCR_palette )+ 
+  stat_cor(label.x = -9, label.y = 6,size=4.5) + 
+  annotate("text",x = -5.3,y=4,label="Slope = 1.3", col="black",size=4.5,hjust = 1)+
+  labs(y=expression("RNAseq log"[2]*" (Fold Change)"), x =expression("RT-qPCR log"[2]*" (Fold Change)"))+
+  ylim(-10,10)+xlim(-10,10)
+
+qPCRScatterPlot
+
+ggsave(filename = "Upf1Nos_Preprocess_Figures/qPCRScatterPlot_6x6.pdf",plot = qPCRScatterPlot, width = 5.8,height = 5.8)
+
+
+```
+
+## RSeqStat Genes
+```{r gene_level:RSeqStat_Genes}
+
+RSeqStat(gnset_WVsUpf)
+RSeqStat(gnset_WVsNos)
+RSeqStat(gnset_WVsUpfNos)
+RSeqStat(gnset_WVsUNL7)
+
+RSeqStat(gnset_WVsUpf,alphaValue = 0.05)
+RSeqStat(gnset_WVsNos,alphaValue = 0.05)
+RSeqStat(gnset_WVsUpfNos,alphaValue = 0.05)
+RSeqStat(gnset_WVsUNL7,alphaValue = 0.05,lfc = 1,output_value = "d")
+nrow(gnsRSEMEdgeR_WVsUNL7_org[gnsRSEMEdgeR_WVsUNL7_org$sig==T,])
+
+RSeqStat(gnset_WVsUpfNos,alphaValue = 0.01)
+RSeqStat(gnset_WVsUpfNos,alphaValue = 0.05)
+RSeqStat(gnset_WVsUpfNos,alphaValue = 0.05,lfc = 0)
+
+
+RSeqStat(gnset_WVsUpfNos,alphaValue = 0.01,lfc = 1,output_value = "p")
+RSeqStat(gnset_WVsUpfNos,alphaValue = 0.05,lfc = 1,output_value = "p")
+
+```
+
+## MDS plots
+
+```{r gene_level:MDS_plots}
+
+# plotMDS(gns_y)
+RNASeq_group_RightOrder <- factor(RNASeq_group,labels = c("W","Nos","Upf1","Upf1-Nos",expression("Upf1-Nos"^L7)),
+                                  levels = c("W","Nos","Upf","UpfNos","UpfNosL7"))
+RNASeq_group_RightOrderText <- c(levels(RNASeq_group_RightOrder)[-5],parse(text=expression("Upf1-Nos"^L7)))
+
+points <- c(24,22,23,21,25)
+colors <- rep(c( "darkgreen","purple", "black", "red", "blue"), 3)
+par(mar = c(5, 5, 5, 1))
+plotMDS(gns_y,  col=colors[RNASeq_group_RightOrder],  pch=points[RNASeq_group_RightOrder],ylim=c(-4,4),xlim=c(-2,6),cex=2, cex.axis=1.8, cex.lab=2)
+legend("topright", legend=RNASeq_group_RightOrderText,pch=points,col=colors,pt.cex=2)
+title("MDS Plot - Gene level")
+saved_plot <- recordPlot()
+
+pdf("Upf1Nos_Preprocess_Figures/MDS.pdf",width = 12, height = 12, pointsize = 18)
+replayPlot(saved_plot)
+dev.off()
+
+
+```
+
+## Smear plots TPM
+
+```{r gene_level:Smear_plots_TPM}
+
+theme_set(theme_bw(base_size = 18))
+tmpPointSize <- 0.8
+point_color_alpha = 1
+annotationSize <- 5
+
+### W vs Upf
+tmpGraph_Upf <- ggplot(gnsRSEMEdgeR_WVsUpf)+geom_point(aes(logTPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=13,label="Upf1 vs. WT", col="black",size=annotationSize,hjust = 1)+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(gnset_WVsUpf,"u"), col=hlines_col,size=annotationSize,hjust = 1)+annotate("text",15,-8,label=RSeqStat(gnset_WVsUpf,"d"), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_Upf
+
+
+### W vs Nos
+tmpGraph_Nos <- ggplot(gnsRSEMEdgeR_WVsNos)+geom_point(aes(logTPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+
+  annotate("text",x = 15,y=13,label="Nos vs. WT", col="black",size=annotationSize,hjust = 1)+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(gnset_WVsNos,"u"), col=hlines_col,size=annotationSize,hjust = 1)+annotate("text",15,-8,label=RSeqStat(gnset_WVsNos,"d"), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_Nos
+
+### W vs UpfNos
+tmpGraph_UN <- ggplot(gnsRSEMEdgeR_WVsUpfNos_org)+geom_point(aes(logTPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=13,label="Upf1-Nos vs. WT", col="black",size=annotationSize,hjust = 1)+
+  annotate("text",x = 15,y=11,label="Including Upf1-misregulated genes", col="black",size=annotationSize-1,hjust = 1)+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(gnset_WVsUpfNos,"u"), col=hlines_col,size=annotationSize,hjust = 1)+annotate("text",15,-8,label=RSeqStat(gnset_WVsUpfNos,"d"), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_UN
+
+### W vs UNL7
+tmpGraph_UNL7 <- ggplot(gnsRSEMEdgeR_WVsUNL7_org)+geom_point(aes(logTPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=13,label="Upf1-Nos-L7 vs. WT", col="black",size=annotationSize,hjust = 1)+
+  annotate("text",x = 15,y=11,label="Including Upf1-misregulated genes", col="black",size=annotationSize-1,hjust = 1)+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(gnset_WVsUNL7,"u"), col=hlines_col,size=annotationSize,hjust = 1)+annotate("text",15,-8,label=RSeqStat(gnset_WVsUNL7,"d"), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_UNL7
+
+
+### W vs UpfNos
+tmpGraph_UN_filtered <- ggplot(gnsRSEMEdgeR_WVsUpfNos)+geom_point(aes(logTPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+
+  annotate("text",x = 15,y=13,label="Upf1-Nos vs. WT", col="black",size=annotationSize,hjust = 1)+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=formatPercentage(gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$sigUp,],gnsRSEMEdgeR_WVsUpfNos), col=hlines_col,size=annotationSize,hjust = 1)+
+  annotate("text",15,-8,label=formatPercentage(gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$sigDep,],gnsRSEMEdgeR_WVsUpfNos), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_UN_filtered
+
+
+### W vs UNL7
+tmpGraph_UNL7_filtered <- ggplot(gnsRSEMEdgeR_WVsUNL7)+geom_point(aes(logTPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=13,label="Upf1-Nos-L7 vs. WT", col="black",size=annotationSize,hjust = 1)+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=formatPercentage(gnsRSEMEdgeR_WVsUNL7[gnsRSEMEdgeR_WVsUNL7$sigUp,],gnsRSEMEdgeR_WVsUNL7), col=hlines_col,size=annotationSize,hjust = 1)+
+  annotate("text",15,-8,label=formatPercentage(gnsRSEMEdgeR_WVsUNL7[gnsRSEMEdgeR_WVsUNL7$sigDep,],gnsRSEMEdgeR_WVsUNL7), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_UNL7_filtered
+
+library(gridExtra)
+tmpGrob <- marrangeGrob(list(tmpGraph_Upf,tmpGraph_Nos,tmpGraph_UN_filtered,tmpGraph_UNL7_filtered),layout_matrix = matrix(seq_len(2*2),2,2,byrow = T), nrow=2,ncol = 2, top="Gene-Level Analysis") 
+print(tmpGrob)
+ggsave(filename = "Upf1Nos_Preprocess_Figures/smear_gene_level68_FDR5prc_logTPM.pdf",plot = tmpGrob, width = 12,height = 8,units = "in",scale = 1,dpi =300)
+
+# # to get this plot for data without the normalization, run the code without the normalization and then plot it
+# ggsave(filename = "Upf1Nos_Preprocess_Figures/NotNormilized_smear_gene_level68_FDR5prc_logTPM.pdf",plot = tmpGrob, width = 12,height = 8,units = "in",scale = 1,dpi =300)
+
+
+```
+
+
+
+## Volcano plots
+
+```{r gene_level:VolcanoPlots}
+# changed to CPM from logTPM , Transcripts
+
+theme_set(theme_bw(base_size = 18))
+tmpPointSize <- 0.8
+point_color_alpha = 1
+annotationSize <- 5
+xlim <- 10
+
+### W vs UpfNos
+tmpGraph_UN <- ggplot(gnsRSEMEdgeR_WVsUpfNos_org)+geom_point(aes(logFC,-log(PValue),color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+
+  annotate("text",x = 8,y=600,label="Upf1-Nos vs. WT", col="black",size=annotationSize,hjust = 1)+
+  scale_x_continuous(limits =c(-xlim,xlim), minor_breaks = c(2.5))+scale_y_continuous(limits =c(0,700), minor_breaks = c(100))+theme( legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))
+tmpGraph_UN
+ 
+tmpGraph_Upf <- ggplot(gnsRSEMEdgeR_WVsUpf)+geom_point(aes(logFC,-log(PValue),color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+
+  annotate("text",x = 8,y=600,label="Upf1 vs. WT", col="black",size=annotationSize,hjust = 1)+
+  scale_x_continuous(limits =c(-xlim,xlim), minor_breaks = c(2.5))+scale_y_continuous(limits =c(0,700), minor_breaks = c(100))+theme( legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))
+tmpGraph_Upf
+
+
+### W vs Nos
+tmpGraph_Nos <- ggplot(gnsRSEMEdgeR_WVsNos)+geom_point(aes(logFC,-log(PValue),color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 8,y=600,label="Nos vs. WT", col="black",size=annotationSize,hjust = 1)+
+  scale_x_continuous(limits =c(-xlim,xlim), minor_breaks = c(2.5))+scale_y_continuous(limits =c(0,700), minor_breaks = c(100))+theme( legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))
+tmpGraph_Nos
+
+### W vs UpfNos
+tmpGraph_UN <- ggplot(gnsRSEMEdgeR_WVsUpfNos_org)+geom_point(aes(logFC,-log(PValue),color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 8,y=600,label="Upf1-Nos vs. WT", col="black",size=annotationSize,hjust = 1)+
+  scale_x_continuous(limits =c(-xlim,xlim), minor_breaks = c(2.5))+scale_y_continuous(limits =c(0,700), minor_breaks = c(100))+theme( legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))
+tmpGraph_UN
+
+### W vs UNL7
+tmpGraph_UNL7 <- ggplot(gnsRSEMEdgeR_WVsUNL7_org)+geom_point(aes(logFC,-log(PValue),color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 8,y=600,label="Upf1-Nos-L7 vs. WT", col="black",size=annotationSize,hjust = 1)+
+  scale_x_continuous(limits =c(-xlim,xlim), minor_breaks = c(2.5))+scale_y_continuous(limits =c(0,700), minor_breaks = c(100))+theme( legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))
+tmpGraph_UNL7
+
+
+
+### W vs UpfNos
+tmpGraph_UN_filtered <- ggplot(gnsRSEMEdgeR_WVsUpfNos)+geom_point(aes(logFC,-log(PValue),color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 8,y=600,label="Upf1-Nos vs. WT", col="black",size=annotationSize,hjust = 1)+
+  annotate("text",x = 8,y=500,label="Excluding Upf1-misregulated genes", col="black",size=annotationSize-1,hjust = 1)+
+  scale_x_continuous(limits =c(-xlim,xlim), minor_breaks = c(2.5))+scale_y_continuous(limits =c(0,700), minor_breaks = c(100))+theme( legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))
+
+
+tmpGraph_UN_filtered
+
+
+### W vs UNL7
+tmpGraph_UNL7_filtered <- ggplot(gnsRSEMEdgeR_WVsUNL7)+geom_point(aes(logFC,-log(PValue),color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 8,y=600,label="Upf1-Nos-L7 vs. WT", col="black",size=annotationSize,hjust = 1)+
+  annotate("text",x = 8,y=500,label="Excluding Upf1-misregulated genes", col="black",size=annotationSize-1,hjust = 1)+
+  scale_x_continuous(limits =c(-xlim,xlim), minor_breaks = c(2.5))+scale_y_continuous(limits =c(0,700), minor_breaks = c(100))+theme( legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))
+tmpGraph_UNL7_filtered
+
+library(gridExtra)
+tmpGrob <- marrangeGrob(list(tmpGraph_Upf,tmpGraph_Nos,tmpGraph_UN,tmpGraph_UNL7,tmpGraph_UN_filtered,tmpGraph_UNL7_filtered),layout_matrix = matrix(seq_len(2*3),3,2,byrow = T), nrow=3,ncol = 2, top="Gene-Level Analysis")
+print(tmpGrob)
+ggsave(filename = "Upf1Nos_Preprocess_Figures/Volcano_gene_level.pdf",plot = tmpGrob, width = 12,height = 12,units = "in",scale = 1,dpi =300)
+
+```
+
+# --------------------------
+# Transcript Expression
+Read output data of RSEM package.
+```{r transcripts}
+
+isoformsRSEM_TPM <- read.table(file="Data/readcounts_isoform/45_RSEM_ENSMBL_6_22_96_isoforms_TPM_matrix.txt",stringsAsFactors = F) # 34K (34,753) isoforms
+colnames(isoformsRSEM_TPM) <- unlist(strsplit(colnames(isoformsRSEM_TPM),".isoforms.results"))
+colnames(isoformsRSEM_TPM) <- paste(unlist(strsplit(colnames(isoformsRSEM_TPM),"RW"))[seq(2,30,2)],"TPM",sep="_")
+isoformsRSEM_TPM$avgTPM <- rowMeans(isoformsRSEM_TPM)
+isoformsRSEM_TPM$logTPM <- log(isoformsRSEM_TPM$avgTPM+0.1,2) 
+isoformsRSEM_TPM <- merge(isoformsRSEM_TPM,FBgnID_FBtrID_BDGP6_22_96,by.x=0,by.y=2) # use 6_22_96 # do not use 6_94 or 6_95 
+rownames(isoformsRSEM_TPM) <- isoformsRSEM_TPM$Row.names
+isoformsRSEM_TPM$Row.names <- NULL
+isoformsRSEM_TPM <- isoformsRSEM_TPM[isoformsRSEM_TPM$FBgnID!="FBgn0013687",] # this is mt:ori gene and there is no transcript ID for this, so it is better to remove if from all data sets
+
+isoformsRSEM <- read.table(file="Data/readcounts_isoform/45_RSEM_ENSMBL_6_22_96_isoforms_counts_matrix.txt",stringsAsFactors = F) # 34K (34,753) isoforms
+colnames(isoformsRSEM) <- unlist(strsplit(colnames(isoformsRSEM),".isoforms.results"))
+colnames(isoformsRSEM) <- unlist(strsplit(colnames(isoformsRSEM),"RW"))[seq(2,30,2)]
+
+mRNALengths <- read.table(file="Data/readcounts_isoform/w_B.isoforms.results",header = T)[,c("transcript_id","length")]
+colnames(mRNALengths) <- c("TrID","RNAlength")
+mRNALengths$RNALength <- as.numeric(mRNALengths$RNAlength)
+mRNALengths$log2RNALength <- log(mRNALengths$RNALength,base = 2)
+mRNALengths$RNAlength <- NULL
+isoformsRSEM <- merge(isoformsRSEM,mRNALengths,by.x=0,by.y=1,all.x=T) # 34753 transcripts
+colnames(isoformsRSEM)[1] <- "TrID"
+isoformsRSEM <- merge(isoformsRSEM,FBgnID_FBtrID_BDGP6_22_96,by.x="TrID",by.y="FBtrID",all.x=T) # 34753 transcripts
+isoformsRSEM$FBgnID <- as.character(isoformsRSEM$FBgnID)
+isoformsRSEM$TrID <- as.character(isoformsRSEM$TrID)
+rownames(isoformsRSEM) <- isoformsRSEM$TrID
+
+maternal_isoforms_onlyINwSamples <- as.matrix(isoformsRSEM[,c(14:16)])
+maternal_isoforms_onlyINwSamples <- as.data.frame(maternal_isoforms_onlyINwSamples[filterByExpr(maternal_isoforms_onlyINwSamples, group=factor(c(rep("W",3))),min.count = 30,min.total.count = 30),])
+maternal_isoforms_onlyINwSamples <- isoformsRSEM[isoformsRSEM$TrID %in% rownames(maternal_isoforms_onlyINwSamples),-c(2:13)] #rownames(maternal_isoforms_onlyINwSamples)
+
+```
+
+
+## Use edgeR:
+now use edgeR
+```{r transcript_level:edgeR}
+# library("edgeR")
+alphaValue <- 0.05  # 0.01
+RNASeq_group <- factor(c(rep("Upf",3),rep("Nos",3),rep("UpfNos",3),rep("UpfNosL7",3),rep("W",3)))
+isoformsMatrix <- as.matrix(isoformsRSEM[,c(2:16)])
+isoformsMatrix <- isoformsMatrix[filterByExpr(isoformsMatrix, group=RNASeq_group,min.count = 30,min.total.count = 30),]
+
+Expressed_isoformsRSEM <- isoformsRSEM[rownames(isoformsMatrix),]       # 12844 transcripts are expressed. # L <- mean(iso_y$samples$lib.size) * 1e-6 #M <- median(iso_y$samples$lib.size) * 1e-6 #c(L, M) #log2(10/M + 2/L)
+iso_y <- DGEList(counts=isoformsMatrix,group = RNASeq_group)
+iso_y <- calcNormFactors(iso_y, logratioTrim=.4)
+iso_y$samples$norm.factors[7:9] <- normalization_factor_from_highley_expressed_genes(as.matrix(Expressed_isoformsRSEM[,2:16]),onlyReportUN = T,mostAbundantRankCutoff = 30)
+iso_y <- estimateCommonDisp(iso_y,verbose = T)
+iso_y <- estimateTagwiseDisp(iso_y,verbose = T)
+iso_countPerMil <- as.data.frame(cpm(iso_y, log =F))
+
+isoet_WVsUpfNos <- exactTest(iso_y, pair = c("W","UpfNos"))
+isoet_WVsUNL7 <- exactTest(iso_y, pair = c("W","UpfNosL7"))
+isoet_WVsUpf <- exactTest(iso_y, pair = c("W","Upf"))
+isoet_WVsNos <- exactTest(iso_y, pair = c("W","Nos"))
+
+```
+
+## Create DB:
+create DB
+```{r transcript_level:DB}
+
+# Removed all Upf1 regulated genes and transcripts from UN and UNL7 but kept Nos regulated genes/transcripts as majority of them fall in the notRegulated category in UN and UNL7
+
+# Upf
+isoformsEdgeR_WVsUpf <- xtrGenesWithGeneIDasAcolumn(isoet_WVsUpf,3,setSignificants = T,colIDName = "TrID")
+isoformsEdgeR_WVsUpf <- merge(isoformsEdgeR_WVsUpf,isoformsRSEM[,c("TrID","RNALength","log2RNALength","FBgnID","GeneName")],by="TrID",all.x=T)
+isoformsEdgeR_WVsUpf <- merge(isoformsEdgeR_WVsUpf,isoformsRSEM_TPM[,c("avgTPM","logTPM")],by.x="TrID",by.y=0,all.x=T)
+
+# Nos
+isoformsEdgeR_WVsNos <- xtrGenesWithGeneIDasAcolumn(isoet_WVsNos,3,setSignificants = T,colIDName = "TrID")
+isoformsEdgeR_WVsNos <- merge(isoformsEdgeR_WVsNos,isoformsRSEM[,c("TrID","RNALength","log2RNALength","FBgnID","GeneName")],by="TrID",all.x=T)
+isoformsEdgeR_WVsNos <- merge(isoformsEdgeR_WVsNos,isoformsRSEM_TPM[,c("avgTPM","logTPM")],by.x="TrID",by.y=0,all.x=T)
+
+# Upf-Nos
+isoformsEdgeR_WVsUpfNos <- xtrGenesWithGeneIDasAcolumn(isoet_WVsUpfNos,3,setSignificants = T,colIDName = "TrID")
+isoformsEdgeR_WVsUpfNos <- merge(isoformsEdgeR_WVsUpfNos,isoformsRSEM[,c("TrID","RNALength","log2RNALength","FBgnID","GeneName")],by="TrID",all.x=T)
+
+isoformsEdgeR_WVsUpfNos <- merge(isoformsEdgeR_WVsUpfNos,isoformsRSEM_TPM[,c("avgTPM","logTPM")],by.x="TrID",by.y=0,all.x=T)
+isoformsEdgeR_WVsUpfNos_org <- isoformsEdgeR_WVsUpfNos
+
+isoformsEdgeR_WVsUpfNos <- subset(isoformsEdgeR_WVsUpfNos, !(TrID %in% subset(isoformsEdgeR_WVsUpf, sig)$TrID))
+
+iso_3UTR_WVsUpfNos <- merge(isoformsEdgeR_WVsUpfNos, subset(all3UTRs_Ensembl_mart_6_22_96,thUTRSeqLength < 2600 ,select=-c(FBgnID)), by="TrID")           
+pure_3UTR_WVsUpfNos <- merge(isoformsEdgeR_WVsUpfNos, subset(all3UTR_pure,thUTRSeqLength < 2600 , select=-c(FBgnID)), by="TrID")
+iso_3UTR_WVsUpfNos_all_noFilter <- merge(isoformsEdgeR_WVsUpfNos, subset(all3UTRs_Ensembl_mart_6_22_96, select=-c(FBgnID)), by="TrID",all.x=T) 
+
+
+# UNL7
+isoformsEdgeR_WVsUNL7 <- xtrGenesWithGeneIDasAcolumn(isoet_WVsUNL7,3,setSignificants = T,colIDName = "TrID")
+isoformsEdgeR_WVsUNL7 <- merge(isoformsEdgeR_WVsUNL7,isoformsRSEM[,c("TrID","RNALength","log2RNALength","FBgnID","GeneName")],by="TrID",all.x=T)
+isoformsEdgeR_WVsUNL7 <- merge(isoformsEdgeR_WVsUNL7,isoformsRSEM_TPM[,c("avgTPM","logTPM")],by.x="TrID",by.y=0,all.x=T)
+isoformsEdgeR_WVsUNL7_org <- isoformsEdgeR_WVsUNL7
+
+isoformsEdgeR_WVsUNL7 <- subset(isoformsEdgeR_WVsUNL7, !(TrID %in% subset(isoformsEdgeR_WVsUpf, sig)$TrID))
+
+iso_3UTR_WVsUNL7 <- merge(isoformsEdgeR_WVsUNL7, subset(all3UTRs_Ensembl_mart_6_22_96,thUTRSeqLength < 2600 , select=-c(FBgnID)), by="TrID")
+pure_3UTR_WVsUNL7 <- merge(isoformsEdgeR_WVsUNL7, subset(all3UTR_pure,thUTRSeqLength < 2600 , select=-c(FBgnID)), by="TrID")
+iso_3UTR_WVsUNL7_all_noFilter <- merge(isoformsEdgeR_WVsUNL7, subset(all3UTRs_Ensembl_mart_6_22_96, select=-c(FBgnID)), by="TrID",all.x=T) 
+
+
+```
+
+## check the graphs:
+check the graphs
+```{r transcript_level:graphs}
+
+RSeqStat(isoet_WVsUpfNos,"p", alphaValue=0.01)
+
+RSeqStat(isoet_WVsUpfNos,"p")
+summary(de <- decideTestsDGE(isoet_WVsUpfNos,adjust.method = "BH", lfc=1, p=alphaValue)) #
+summary(de <- decideTestsDGE(isoet_WVsUpfNos,adjust.method = "BH", p=alphaValue)) #, lfc=1
+plotSmear(isoet_WVsUpfNos, de.tags=rownames(iso_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue")
+title("Transcripts: W_vs_Upf1Nos")
+
+
+RSeqStat(isoet_WVsUNL7,"p")
+summary(de <- decideTestsDGE(isoet_WVsUNL7,adjust.method = "BH", lfc=1, p=alphaValue)) #
+summary(de <- decideTestsDGE(isoet_WVsUNL7,adjust.method = "BH", p=alphaValue)) #, lfc=1
+plotSmear(isoet_WVsUNL7, de.tags=rownames(iso_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue")
+title("Transcripts: W_vs_Upf1NosL7")
+
+RSeqStat(isoet_WVsUpf,"p")
+summary(de <- decideTestsDGE(isoet_WVsUpf,adjust.method = "BH", lfc=1, p=alphaValue)) #
+summary(de <- decideTestsDGE(isoet_WVsUpf,adjust.method = "BH", p=alphaValue)) #, lfc=1
+plotSmear(isoet_WVsUpf, de.tags=rownames(iso_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue")
+title("Transcripts: W_vs_Upf1")
+
+RSeqStat(isoet_WVsNos,"p")
+summary(de <- decideTestsDGE(isoet_WVsNos,adjust.method = "BH", lfc=1, p=alphaValue)) #
+summary(de <- decideTestsDGE(isoet_WVsNos,adjust.method = "BH", p=alphaValue)) #, lfc=1
+plotSmear(isoet_WVsNos, de.tags=rownames(iso_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue")
+title("Transcripts: W_vs_Nos")
+
+
+
+####====================================================+++ 
+####====================================================+++ 
+
+isoformsEdgeR <- xtrGenesWithGeneIDasAcolumn(isoet_WVsUpfNos,3,setSignificants = T,colIDName = "TrID")
+isoformsEdgeR <- merge(isoformsEdgeR,isoformsRSEM[,-c(2:16)],by=1)
+
+ggplot(isoformsEdgeR)+geom_point(aes(logCPM,logFC), size=0.4,col=ifelse(isoformsEdgeR$sig,"red","black"))+
+  ylim(-10,10)+ggtitle("Isoforms, RSEM, EdgeR")+geom_hline(yintercept = c(1,-1),col="blue")
+
+ggplot(isoformsEdgeR)+geom_point(aes(logCPM,logFC), size=0.4,col=ifelse(isoformsEdgeR$sig,"orange","gray"))+geom_density2d(aes(logCPM,logFC))+
+  ylim(-10,10)+ggtitle("Isoforms, RSEM, EdgeR")
+
+summary(de <- decideTestsDGE(isoet_WVsUNL7,adjust.method = "BH",  lfc=1, p=alphaValue))
+plotSmear(isoet_WVsUNL7, de.tags=rownames(iso_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue") 
+title("Graph: 3rd-RNAseq, W_vs_UpfNosL7")
+
+isoformsEdgeR <- xtrGenesWithGeneIDasAcolumn(isoet_WVsUNL7,3,setSignificants = T,colIDName = "TrID")
+isoformsEdgeR <- merge(isoformsEdgeR,isoformsRSEM[,-c(2:16)],by=1)
+ggplot(isoformsEdgeR)+geom_point(aes(logCPM,logFC), size=0.4,col=ifelse(isoformsEdgeR$sig,"red","black"))+
+  ylim(-10,10)+ggtitle("Isoforms, RSEM, EdgeR")+geom_hline(yintercept = c(1,-1),col="blue")
+
+```
+
+## RSeqStat Transcripts
+
+```{r transcript_level:RSeqStat}
+
+RSeqStat(isoet_WVsUpf)
+RSeqStat(isoet_WVsNos)
+RSeqStat(isoet_WVsUpfNos)
+RSeqStat(isoet_WVsUNL7)
+
+RSeqStat(isoet_WVsUpf,alphaValue = 0.05)
+RSeqStat(isoet_WVsNos,alphaValue = 0.05)
+RSeqStat(isoet_WVsUpfNos,alphaValue = 0.05)
+RSeqStat(isoet_WVsUNL7,alphaValue = 0.05)
+
+RSeqStat(isoet_WVsUpfNos,alphaValue = 0.01,lfc = 1,output_value = "p")
+RSeqStat(isoet_WVsUpfNos,alphaValue = 0.05,lfc = 1,output_value = "p")
+
+```
+
+
+## MDS plot All samples
+
+```{r transcript_level:MDS_plots}
+
+RNASeq_group_RightOrder <- factor(RNASeq_group,labels = c("W","Nos","Upf","Upf1-Nos","Upf1-NosL7"),
+                                  levels = c("W","Nos","Upf","UpfNos","UpfNosL7"))
+
+RNASeq_group_RightOrderText <- c(levels(RNASeq_group_RightOrder)[-5],parse(text=expression("Upf1-Nos"^L7)))
+
+points <- c(24,22,23,21,25)
+colors <- rep(c( "darkgreen","purple", "black", "red", "blue"), 3)
+par(mar = c(5, 5, 5, 1))
+plotMDS(iso_y,  col=colors[RNASeq_group_RightOrder],  pch=points[RNASeq_group_RightOrder],ylim=c(-4,4),xlim=c(-2,6),cex=2, cex.axis=1.8, cex.lab=2)
+legend("topright", legend=RNASeq_group_RightOrderText,pch=points,col=colors,pt.cex=2)
+title("MDS Plot - Transcript level")
+saved_plot <- recordPlot()
+
+pdf("Upf1Nos_Preprocess_Figures/MDS_transcript.pdf",width = 12,height = 12 , pointsize = 18)
+replayPlot(saved_plot)
+dev.off()
+
+
+```
+
+## Smear plots (TPM)
+
+```{r transcript_level:Smear_plots}
+
+theme_set(theme_bw(base_size = 18))
+tmpPointSize <- 0.5
+
+### W vs Upf
+tmpGraph_Upf <- ggplot(isoformsEdgeR_WVsUpf)+geom_point(aes(logTPM,logFC,color=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=14,label="Upf1 vs. WT", col="black",size=5,hjust = 1)+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(isoet_WVsUpf,"u"), col=hlines_col,size=5,hjust = 1)+annotate("text",15,-8,label=RSeqStat(isoet_WVsUpf,"d"), col=hlines_col,size=5,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(breaks = c(-15,-10,-5,0,5,10,15),limits =c(-15.5,15.5),minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_Upf
+
+
+### W vs Nos
+tmpGraph_Nos <- ggplot(isoformsEdgeR_WVsNos)+geom_point(aes(logTPM,logFC,color=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=14,label="Nos vs. WT", col="black",size=5,hjust = 1)+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(isoet_WVsNos,"u"), col=hlines_col,size=5,hjust = 1)+annotate("text",15,-8,label=RSeqStat(isoet_WVsNos,"d"), col=hlines_col,size=5,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(breaks = c(-15,-10,-5,0,5,10,15),limits =c(-15.5,15.5),minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_Nos
+
+
+### W vs UpfNos
+tmpGraph_UN <- ggplot(isoformsEdgeR_WVsUpfNos_org)+geom_point(aes(logTPM,logFC,color=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=14,label="Upf1-Nos vs. WT", col="black",size=5,hjust = 1)+
+  annotate("text",x = 15,y=11,label="Including Upf1-misregulated mRNAs", col="black",size=4,hjust = 1)+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(isoet_WVsUpfNos,"u"), col=hlines_col,size=5,hjust = 1)+annotate("text",15,-8,label=RSeqStat(isoet_WVsUpfNos,"d"), col=hlines_col,size=5,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(breaks = c(-15,-10,-5,0,5,10,15),limits =c(-15.5,15.5),minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_UN
+
+
+### W vs UNL7
+tmpGraph_UNL7 <- ggplot(isoformsEdgeR_WVsUNL7_org)+geom_point(aes(logTPM,logFC,color=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+
+  annotate("text",x = 15,y=14,label="Upf1-Nos-L7 vs. WT", col="black",size=5,hjust = 1)+
+  annotate("text",x = 15,y=11,label="Including Upf1-misregulated mRNAs", col="black",size=4,hjust = 1)+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(isoet_WVsUNL7,"u"), col=hlines_col,size=5,hjust = 1)+annotate("text",15,-8,label=RSeqStat(isoet_WVsUNL7,"d"), col=hlines_col,size=5,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(breaks = c(-15,-10,-5,0,5,10,15),limits =c(-16.4,15.5),minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_UNL7
+
+
+
+### W vs UpfNos
+tmpGraph_UN_filtered <- ggplot(isoformsEdgeR_WVsUpfNos)+geom_point(aes(logTPM,logFC,color=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=14,label="Upf1-Nos vs. WT", col="black",size=5,hjust = 1)+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=formatPercentage(isoformsEdgeR_WVsUpfNos[isoformsEdgeR_WVsUpfNos$sigUp,],isoformsEdgeR_WVsUpfNos), col=hlines_col,size=5,hjust = 1)+
+  annotate("text",15,-8,label=formatPercentage(isoformsEdgeR_WVsUpfNos[isoformsEdgeR_WVsUpfNos$sigDep,],isoformsEdgeR_WVsUpfNos), col=hlines_col,size=5,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(breaks = c(-15,-10,-5,0,5,10,15),limits =c(-15.5,15.5),minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_UN_filtered
+
+
+
+### W vs UNL7
+tmpGraph_UNL7_filtered <- ggplot(isoformsEdgeR_WVsUNL7)+geom_point(aes(logTPM,logFC,color=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=14,label="Upf1-Nos-L7 vs. WT", col="black",size=5,hjust = 1)+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=formatPercentage(isoformsEdgeR_WVsUNL7[isoformsEdgeR_WVsUNL7$sigUp,],isoformsEdgeR_WVsUNL7), col=hlines_col,size=5,hjust = 1)+
+  annotate("text",15,-8,label=formatPercentage(isoformsEdgeR_WVsUNL7[isoformsEdgeR_WVsUNL7$sigDep,],isoformsEdgeR_WVsUNL7), col=hlines_col,size=5,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(breaks = c(-15,-10,-5,0,5,10,15),limits =c(-16.4,15.5),minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_UNL7_filtered
+
+
+
+library(gridExtra)
+tmpGrob <- marrangeGrob(list(tmpGraph_Upf,tmpGraph_Nos,tmpGraph_UN_filtered,tmpGraph_UNL7_filtered),
+                        layout_matrix = matrix(seq_len(2*2),2,2,byrow = T),nrow=2,ncol = 2, top="Transcript-Level Analysis") # , widths = c(4,1))
+print(tmpGrob)
+ggsave(filename = "Upf1Nos_Preprocess_Figures/smear_transcript_level_FDR5prc.pdf",plot = tmpGrob, width = 12,height = 8,units = "in",scale = 1,dpi =300) 
+
+
+
+```
+
+
+## number of Iso per gene
+
+```{r isoNUmberPerGene}
+
+inGeneDataset <- gnsRSEMEdgeR_WVsUNL7
+inIsoDataset <- isoformsEdgeR_WVsUNL7
+
+tNumIso <- inIsoDataset %>% group_by(FBgnID) %>% summarise(n=n())
+table(tNumIso$n)
+100*table(tNumIso$n)/sum(tNumIso$n)
+sum(tNumIso$n[tNumIso$n > 6])
+qplot(tNumIso$n,bins=22)
+```
+
+
+# --------------------------
+# Extract normalization factors as a table
+```{r }
+
+tGenesNormalization <- normalization_factor_from_highley_expressed_genes(as.matrix(Expressed_genesRSEM[,2:16]),onlyReportUN = F,mostAbundantRankCutoff = 30)
+tGenesNormalization <- tGenesNormalization[order(tGenesNormalization$W_rank),]
+tGenesNormalization <- subset(tGenesNormalization,select=c(W_rank,wMeanCPM,diff_UpfNos_1,diff_UpfNos_2,diff_UpfNos_3))
+tGenesNormalization <- round(tGenesNormalization,3)
+tGenesNormalization <- geneID2name6_22_96_append(tGenesNormalization,userownames = 1)
+tGenesNormalization <- tGenesNormalization[order(tGenesNormalization$W_rank),]
+write.csv(tGenesNormalization,file = "normalization_factors_genes.csv",quote = F)
+
+tIsoformNormalization <- normalization_factor_from_highley_expressed_genes(as.matrix(Expressed_isoformsRSEM[,2:16]),onlyReportUN = F,mostAbundantRankCutoff = 30)
+tIsoformNormalization <- tIsoformNormalization[order(tIsoformNormalization$W_rank),]
+tIsoformNormalization <- subset(tIsoformNormalization,select=c(W_rank,wMeanCPM,diff_UpfNos_1,diff_UpfNos_2,diff_UpfNos_3))
+tIsoformNormalization <- round(tIsoformNormalization,3)
+tIsoformNormalization <- merge(tIsoformNormalization,FBgnID_FBtrID_BDGP6_22_96,by.x=0,by.y="FBtrID")
+tIsoformNormalization <- tIsoformNormalization[order(tIsoformNormalization$W_rank),]
+write.csv(tIsoformNormalization,file = "normalization_factors_transcripts.csv",quote = F)
+
+```
+
+
+
+## RNA length vs Fold change plots - A
+
+```{r RNA_length_vs_Fold_change_main}
+
+iso_3UTR_WVsUpfNos %>% group_by(status2) %>% summarise(avgUTRlen=mean(thUTRSeqLength))
+iso_3UTR_WVsUpfNos %>% group_by(status2) %>% summarise(avgLogUTRlen=mean(log(thUTRSeqLength,10)))
+
+theme_set(theme_bw(base_size = 18))
+library("ggpubr")
+tmpPlot9 <- ggplot(iso_3UTR_WVsUpfNos)+geom_boxplot(aes(status2,log(thUTRSeqLength,10), fill=status2))+ggtitle(label = "UpfNos")+ylab(expression("log"[10]*"(3'-UTR length)"))+xlab(" ")+ stat_compare_means( aes(status2,log(thUTRSeqLength,10)), label = "p.format",label.x = 1.35, label.y = 3.5)+ylim(0,4)#+ylim(2.5,12.5)
+ggsave(filename = "Upf1Nos_Preprocess_Figures/logFC_vs_3UTR_RNA_Length_box_log.pdf",plot = tmpPlot9, width = 6,height = 6,units = "in",scale = 1,dpi =300)
+
+tmpPlot9 <- ggplot(iso_3UTR_WVsUpfNos)+geom_violin(aes(status2,log(thUTRSeqLength,10), fill=status2))+ggtitle(label = "UpfNos")+ylab(expression("log"[10]*"(3'-UTR length)"))+xlab(" ")+ stat_compare_means( aes(status2,log(thUTRSeqLength,10)), label = "p.format",label.x = 1.35, label.y = 3.5)+ylim(0,4)#+ylim(2.5,12.5)
+ggsave(filename = "Upf1Nos_Preprocess_Figures/logFC_vs_3UTR_RNA_Length_violin_log.pdf",plot = tmpPlot9, width = 6,height = 6,units = "in",scale = 1,dpi =300)
+
+
+tmpPlot9 <- ggplot(iso_3UTR_WVsUpfNos)+geom_boxplot(aes(status2,thUTRSeqLength, fill=status2))+ggtitle(label = "UpfNos")+ylab(expression("3'-UTR length"))+xlab(" ")+ stat_compare_means( aes(status2,thUTRSeqLength), label = "p.format",label.x = 1.35, label.y = 2500)#+ylim(0,4)#+ylim(2.5,12.5)
+ggsave(filename = "Upf1Nos_Preprocess_Figures/logFC_vs_3UTR_RNA_Length_box.pdf",plot = tmpPlot9, width = 6,height = 6,units = "in",scale = 1,dpi =300)
+
+mean(iso_3UTR_WVsUpfNos$thUTRSeqLength[iso_3UTR_WVsUpfNos$status2=="Depleted"])
+mean(iso_3UTR_WVsUpfNos$thUTRSeqLength[iso_3UTR_WVsUpfNos$status2=="Not_Depleted"])
+
+log(mean(iso_3UTR_WVsUpfNos$thUTRSeqLength[iso_3UTR_WVsUpfNos$status2=="Depleted"]),10)
+log(mean(iso_3UTR_WVsUpfNos$thUTRSeqLength[iso_3UTR_WVsUpfNos$status2=="Not_Depleted"]),10)
+
+
+wilcox.test(log(thUTRSeqLength,2) ~ status2,data = iso_3UTR_WVsUpfNos, alternative="two.sided")
+
+tmpPlot9 <- ggplot(iso_3UTR_WVsUpfNos)+geom_density(aes(log(thUTRSeqLength,10), color=status2))+ggtitle(label = "UpfNos")+xlab(expression("log"[10]*"(3'-UTR length)"))+
+  annotate("text",x = 1.5,y=0.75,label="p = 1.9e-05", col="black")
+ggsave(filename = "Upf1Nos_Preprocess_Figures/logFC_vs_3UTR_RNA_Length_density.pdf",plot = tmpPlot9, width = 6,height = 6,units = "in",scale = 1,dpi =300)
+
+```
+
+## RNA length vs Fold change plots - B
+```{r RNA_length_vs_Fold_change}
+
+ggplot(isoformsEdgeR_WVsUNL7)+geom_boxplot(aes(status,log2RNALength, fill=status))#+ylim(0,5000)
+
+tmpPlot1 <- ggplot(isoformsEdgeR_WVsUpf)+geom_boxplot(aes(status,log2RNALength, fill=status))+ggtitle(label = "Upf")+ylab(expression("log"[2]*"(RNA length)"))
+tmpPlot2 <- ggplot(isoformsEdgeR_WVsNos)+geom_boxplot(aes(status,log2RNALength, fill=status))+ggtitle(label = "Nos")+ylab(expression("log"[2]*"(RNA length)"))
+tmpPlot3 <- ggplot(isoformsEdgeR_WVsUNL7)+geom_boxplot(aes(status,log2RNALength, fill=status))+ggtitle(label = "UpfNosL7")+ylab(expression("log"[2]*"(RNA length)"))
+tmpPlot4 <- ggplot(isoformsEdgeR_WVsUpfNos)+geom_boxplot(aes(status,log2RNALength, fill=status))+ggtitle(label = "UpfNos")+ylab(expression("log"[2]*"(RNA length)"))
+tmpPlot5 <- ggplot(iso_3UTR_WVsUNL7)+geom_boxplot(aes(status,log(thUTRSeqLength,2), fill=status))+ggtitle(label = "UpfNosL7")+ylab(expression("log"[2]*"(3UTR length)"))
+tmpPlot6 <- ggplot(iso_3UTR_WVsUpfNos)+geom_boxplot(aes(status,log(thUTRSeqLength,2), fill=status))+ggtitle(label = "UpfNos")+ylab(expression("log"[2]*"(3UTR length)"))
+
+library(gridExtra)
+tmpGrob <- marrangeGrob(list(tmpPlot1,tmpPlot3,tmpPlot5,tmpPlot2,tmpPlot4,tmpPlot6), nrow=3, ncol = 2, top="LogFC vs RNA/3UTR Length")
+print(tmpGrob)
+ggsave(filename = "Upf1Nos_Preprocess_Figures/logFC_vs_3UTR_RNA_Length_box.png",plot = tmpGrob, width = 6,height = 6,units = "in",scale = 2,dpi =300)
+
+
+formula <- y ~ x
+ggplot(isoformsEdgeR_WVsUNL7,aes(log2RNALength,logFC))+geom_point(aes(col=status), size=0.3)+geom_smooth(method = "lm")+
+  stat_poly_eq(aes(label =  paste( ..eq.label.., sep = "*\",\"~~")), formula = formula, label.x = "right",label.y = "top", parse = TRUE)
+
+ggplot(isoformsEdgeR_WVsUNL7,aes(log2RNALength,logFC))+geom_point(aes(col=stat_status), size=0.3)+geom_smooth(method = "auto")+
+  stat_poly_eq(aes(label =  paste( ..eq.label.., sep = "*\",\"~~")), formula = formula, label.x = "right",label.y = "top", parse = TRUE)
+
+ggplot(iso_3UTR_WVsUNL7)+geom_boxplot(aes(status,log(thUTRSeqLength,2), fill=status))#+ylim(0,5000)
+ggplot(iso_3UTR_WVsUNL7)+geom_boxplot(aes(status5,log(thUTRSeqLength,2), fill=status5))#+ylim(0,5000)
+
+formula <- y ~ x
+ggplot(isoformsEdgeR_WVsUNL7,aes(log2RNALength,logFC))+geom_point(aes(col=status), size=0.3)+geom_smooth(method = "lm")+
+  stat_poly_eq(aes(label =  paste( ..eq.label.., sep = "*\",\"~~")), formula = formula, label.x = "right",label.y = "top", parse = TRUE)
+
+
+formula <- y ~ x
+tmpPlot1 <- ggplot(isoformsEdgeR_WVsUpf,aes(log2RNALength,logFC))+geom_point(size=0.3)+geom_smooth(method = "lm")+
+  xlab(expression("log"[2]*"(RNA length)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  ggtitle(label = "Nos")+
+  stat_poly_eq(aes(label =  paste( ..eq.label.., sep = "*\",\"~~")), formula = formula, label.x = "left",label.y = "top", parse = TRUE)+
+  stat_fit_glance(method = "lm", method.args = list(formula = formula),label.x = "right",label.y = "top",  aes(label = paste("italic(P)*\"-value = \"*", signif(..p.value.., digits = 2), sep = "")), parse = TRUE)
+
+tmpPlot2 <- ggplot(isoformsEdgeR_WVsNos,aes(log2RNALength,logFC))+geom_point(size=0.3)+geom_smooth(method = "lm")+
+  xlab(expression("log"[2]*"(RNA length)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  ggtitle(label = "Upf")+
+  stat_poly_eq(aes(label =  paste( ..eq.label.., sep = "*\",\"~~")), formula = formula, label.x = "left",label.y = "top", parse = TRUE)+
+  stat_fit_glance(method = "lm", method.args = list(formula = formula),label.x = "right",label.y = "top",  aes(label = paste("italic(P)*\"-value = \"*", signif(..p.value.., digits = 2), sep = "")), parse = TRUE)
+
+tmpPlot3 <- ggplot(isoformsEdgeR_WVsUNL7,aes(log2RNALength,logFC))+geom_point(size=0.3)+geom_smooth(method = "lm")+
+  xlab(expression("log"[2]*"(RNA length)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  ggtitle(label = "UpfNosL7")+
+  stat_poly_eq(aes(label =  paste( ..eq.label.., sep = "*\",\"~~")), formula = formula, label.x = "left",label.y = "top", parse = TRUE)+
+  stat_fit_glance(method = "lm", method.args = list(formula = formula),label.x = "right",label.y = "top",  aes(label = paste("italic(P)*\"-value = \"*", signif(..p.value.., digits = 2), sep = "")), parse = TRUE)
+
+tmpPlot4 <- ggplot(isoformsEdgeR_WVsUpfNos,aes(log2RNALength,logFC))+geom_point(size=0.3)+geom_smooth(method = "lm")+
+  xlab(expression("log"[2]*"(RNA length)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  ggtitle(label = "UpfNos")+
+  stat_poly_eq(aes(label =  paste( ..eq.label.., sep = "*\",\"~~")), formula = formula, label.x = "left",label.y = "top", parse = TRUE)+
+  stat_fit_glance(method = "lm", method.args = list(formula = formula),label.x = "right",label.y = "top",  aes(label = paste("italic(P)*\"-value = \"*", signif(..p.value.., digits = 2), sep = "")), parse = TRUE)
+
+formula <- y ~ x
+tmpPlot5 <- ggplot(iso_3UTR_WVsUNL7,aes(log(thUTRSeqLength,2),logFC))+geom_point(size=0.3)+geom_smooth(method = "lm")+
+  xlab(expression("log"[2]*"(3UTR length)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  coord_cartesian(xlim=c(3,12))+
+  ggtitle(label = "UpfNosL7")+
+  stat_poly_eq(aes(label =  paste( ..eq.label.., sep = "*\",\"~~")), formula = formula, label.x = "left",label.y = "top", parse = TRUE)+
+  stat_fit_glance(method = "lm", method.args = list(formula = formula),label.x = "right",label.y = "top",  aes(label = paste("italic(P)*\"-value = \"*", signif(..p.value.., digits = 2), sep = "")), parse = TRUE)
+
+formula <- y ~ x
+tmpPlot6 <- ggplot(iso_3UTR_WVsUpfNos,aes(log(thUTRSeqLength,2),logFC))+geom_point(size=0.3)+geom_smooth(method = "lm")+
+  xlab(expression("log"[2]*"(3UTR length)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  coord_cartesian(xlim=c(3,12))+
+  ggtitle(label = "UpfNos")+
+  stat_poly_eq(aes(label =  paste( ..eq.label.., sep = "*\",\"~~")), formula = formula, label.x = "left",label.y = "top", parse = TRUE)+
+  stat_fit_glance(method = "lm", method.args = list(formula = formula),label.x = "right",label.y = "top",  aes(label = paste("italic(P)*\"-value = \"*", signif(..p.value.., digits = 2), sep = "")), parse = TRUE)
+
+library(gridExtra)
+tmpGrob <- marrangeGrob(list(tmpPlot1,tmpPlot3,tmpPlot5,tmpPlot2,tmpPlot4,tmpPlot6), nrow=3, ncol = 2, top="LogFC vs RNA/3UTR Length")
+print(tmpGrob)
+ggsave(filename = "Upf1Nos_Preprocess_Figures/logFC_vs_3UTR_RNA_Length_Line.png",plot = tmpGrob, width = 4,height = 6,units = "in",scale = 2,dpi =300)
+
+
+### _ _ _ _ _ _ _ RNA length vs 3UTR ######
+ggplot(iso_3UTR_WVsUNL7,aes(log(thUTRSeqLength,2),log2RNALength))+geom_point(size=0.3)+geom_smooth(method = "lm")+coord_cartesian(xlim=c(3,12),ylim=c(6,15))+
+  xlab(expression("log"[2]*"(3UTR length)"))+ylab(expression("log"[2]*"(RNA length)"))+
+  stat_poly_eq(aes(label =  paste( ..eq.label.., sep = "*\",\"~~")), formula = formula, label.x = "left",label.y = "top", parse = TRUE)+
+  stat_fit_glance(method = "lm", method.args = list(formula = formula),label.x = "right",label.y = "top",  aes(label = paste("italic(P)*\"-value = \"*", signif(..p.value.., digits = 2), sep = "")), parse = TRUE)
+
+
+```
+
+# --------------------------
+# compelete genelist export
+```{r}
+
+compGns <- makeCompleteGeneList(useOriginal = T)
+compGns <- compGns[,-which( grepl(pattern = "status2",colnames(compGns)) )]
+compGns <- compGns[,-which( grepl(pattern = "status3",colnames(compGns)) )]
+compGns <- compGns[,-which( grepl(pattern = "status5",colnames(compGns)) )]
+compGns <- compGns[,-which( grepl(pattern = "StrictNonSig",colnames(compGns)) )]
+compGns$removed_from_UN_and_UNL7 <- compGns$sig_Upf
+write.csv(compGns,file="CompleteGeneList_withUpf_6857.csv",quote = F)
+
+temp <- genesRSEM_TPM[rownames(genesRSEM_TPM) %in% compGns$FBgnID,]
+temp <- t(apply(temp[,c(1:15)], 1, function(eachRow){c(mean(eachRow[1:3]),mean(eachRow[4:6]),mean(eachRow[7:9]),mean(eachRow[10:12]),mean(eachRow[13:15]))}))
+colnames(temp) <- c("Upf","Nos","UpfNos","UpfNosL7","W")
+temp <- as.data.frame(temp)
+temp$avgTPM <- rowMeans(temp)
+temp$logTPM <- log(temp$avgTPM+0.1,2)
+temp <- geneID2name6_22_96_append(temp,1)
+write.csv(temp,file="CompleteGeneList_withUpf_6857_avgTPM_values.csv",quote = F)
+
+
+compGns <- makeCompleteTranscriptList(useOriginal = T)
+compGns <- compGns[,-which( grepl(pattern = "status2",colnames(compGns)) )]
+compGns <- compGns[,-which( grepl(pattern = "status3",colnames(compGns)) )]
+compGns <- compGns[,-which( grepl(pattern = "status5",colnames(compGns)) )]
+compGns <- compGns[,-which( grepl(pattern = "StrictNonSig",colnames(compGns)) )]
+compGns$removed_from_UN_and_UNL7 <- compGns$sig_Upf
+write.csv(compGns,file="CompleteTranscriptList_withUpf_6857.csv",quote = F)
+
+```
+
+
+
+# --------------------------
+## marksOnSmear Glycolysi
+
+```{r}
+markPointSize <- 2
+labelSize <- 4
+tmpPointSize <- 0.4
+
+GO_glycolysis_IDs <- c("FBgn0000064","FBgn0000579","FBgn0001091","FBgn0001092","FBgn0001186","FBgn0003074","FBgn0014869","FBgn0086355","FBgn0250906","FBgn0267385")
+
+tmpGraph_UN_glycolysisrep <- ggplot(gnsRSEMEdgeR_WVsUpfNos)+geom_point(aes(logTPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  geom_point(data = gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$FBgnID %in% GO_glycolysis_IDs,],aes(logCPM,logFC),color="black")+
+  annotate("text",x = 15,y=13,label="Upf1-Nos vs. WT", col="black",size=annotationSize,hjust = 1)+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=formatPercentage(gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$sigUp,],gnsRSEMEdgeR_WVsUpfNos), col=hlines_col,size=annotationSize,hjust = 1)+
+  annotate("text",15,-8,label=formatPercentage(gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$sigDep,],gnsRSEMEdgeR_WVsUpfNos), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*" (Transcript per Million)"))+ylab(expression("log"[2]*" (Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+    geom_label_repel(aes(logCPM,logFC,label=ifelse(FBgnID %in% GO_glycolysis_IDs, as.character(GeneName),NA)), fill = "gray80",size=labelSize,
+                   color="black",fontface = "bold",segment.colour="black", label.r=0.5,label.size	=0.5)+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_UN_glycolysisrep
+
+ggsave(filename = "Upf1Nos_Preprocess_Figures/marksOnSmear_UN_glycolysis.pdf",plot = tmpGraph_UN_glycolysisrep,width = 6,height = 4.5)
+
+write.csv(gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$FBgnID %in% GO_glycolysis_IDs,],file = "marksOnSmear_UN_glycolysis.csv",quote = F)
+ 
+
+```
+
+## marksOnSmear DNA-rep
+```{r}
+markPointSize <- 2
+labelSize <- 4
+tmpPointSize <- 0.4
+
+#### _ _ _ _ _ _ mark DNA replication, importin,  genes ####
+# DNA replication KEEG only, 24 # DNA replication  32 genes, # Mismatch repair, # Nucleotide excision repair
+# All cat, #86 genes,  79 is present in our data
+
+# # replication
+# GO_grep_IDs <- c("FBgn0010173","FBgn0014861","FBgn0262619","FBgn0017577","FBgn0263600","FBgn0027903","FBgn0264326","FBgn0025832","FBgn0004913","FBgn0283467","FBgn0260985","FBgn0030170","FBgn0266421","FBgn0005696","FBgn0015929","FBgn0032906","FBgn0030871","FBgn0035644","FBgn0032244","FBgn0259113","FBgn0011762","FBgn0010438","FBgn0259676","FBgn0034726FBgn0014861","FBgn0032154","FBgn0015271","FBgn0030196","FBgn0015270","FBgn0004913","FBgn0003227","FBgn0026143","FBgn0002891","FBgn0030871","FBgn0035644","FBgn0040290","FBgn0010173","FBgn0002906","FBgn0000927","FBgn0027903","FBgn0260985","FBgn0266421","FBgn0005654","FBgn0011704","FBgn0015929","FBgn0032906","FBgn0004087","FBgn0002183","FBgn0010278","FBgn0011762","FBgn0259113","FBgn0011703","FBgn0010438","FBgn0259676","FBgn0023180FBgn0014861","FBgn0017577","FBgn0015271","FBgn0015270","FBgn0002878","FBgn0003227","FBgn0005654","FBgn0005696","FBgn0015929","FBgn0022772","FBgn0026143","FBgn0028360","FBgn0259113","FBgn0023181","FBgn0023180,FBgn0010173","FBgn0033690","FBgn0005696","FBgn0030871","FBgn0002905","FBgn0035644","FBgn0032244","FBgn0015271","FBgn0264326","FBgn0015270","FBgn0259676","FBgn0031875")
+# # recombination
+# GO_grep_IDs <- c("FBgn0040268","FBgn0010173","FBgn0002906","FBgn0263600","FBgn0027903","FBgn0261530","FBgn0283467","FBgn0003479","FBgn0266666","FBgn0266421","FBgn0034728","FBgn0032906","FBgn0003480","FBgn0010438","FBgn0033549,FBgn0010173","FBgn0015553","FBgn0262619","FBgn0002707","FBgn0028515","FBgn0041627","FBgn0003479","FBgn0030931","FBgn0266421","FBgn0032906","FBgn0027375","FBgn0003480","FBgn0033389","FBgn0011774","FBgn0030506","FBgn0040290")
+# # repair
+# GO_grep_IDs <- c("FBgn0010173","FBgn0015553","FBgn0262619","FBgn0036486","FBgn0263600","FBgn0027903","FBgn0004913","FBgn0283467","FBgn0260985","FBgn0266421","FBgn0032906","FBgn0030871","FBgn0032244","FBgn0010438","FBgn0011659","FBgn0015546,FBgn0010173","FBgn0261109","FBgn0262619","FBgn0022936","FBgn0002707","FBgn0263600","FBgn0261850","FBgn0027903","FBgn0264326","FBgn0004913","FBgn0283467","FBgn0260985","FBgn0002887","FBgn0024956","FBgn0004832","FBgn0266421","FBgn0028434","FBgn0032906","FBgn0033929","FBgn0030871","FBgn0035644","FBgn0032244","FBgn0034726FBgn0002906","FBgn0011774","FBgn0259113","FBgn0037338","FBgn0030506","FBgn0041627","FBgn0028515,FBgn0040268","FBgn0037384","FBgn0002906","FBgn0002707","FBgn0037141","FBgn0039065","FBgn0027868","FBgn0003479","FBgn0266666","FBgn0034728","FBgn0027375","FBgn0002891","FBgn0050169","FBgn0266282","FBgn0052438")
+
+# All cat
+GO_grep_IDs <- c("FBgn0010173","FBgn0014861","FBgn0262619","FBgn0017577","FBgn0263600","FBgn0027903","FBgn0264326","FBgn0025832","FBgn0004913","FBgn0283467","FBgn0260985","FBgn0030170","FBgn0266421","FBgn0005696","FBgn0015929","FBgn0032906","FBgn0030871","FBgn0035644","FBgn0032244","FBgn0259113","FBgn0011762","FBgn0010438","FBgn0259676","FBgn0034726FBgn0014861","FBgn0032154","FBgn0015271","FBgn0030196","FBgn0015270","FBgn0004913","FBgn0003227","FBgn0026143","FBgn0002891","FBgn0030871","FBgn0035644","FBgn0040290","FBgn0010173","FBgn0002906","FBgn0000927","FBgn0027903","FBgn0260985","FBgn0266421","FBgn0005654","FBgn0011704","FBgn0015929","FBgn0032906","FBgn0004087","FBgn0002183","FBgn0010278","FBgn0011762","FBgn0259113","FBgn0011703","FBgn0010438","FBgn0259676","FBgn0023180FBgn0014861","FBgn0017577","FBgn0015271","FBgn0015270","FBgn0002878","FBgn0003227","FBgn0005654","FBgn0005696","FBgn0015929","FBgn0022772","FBgn0026143","FBgn0028360","FBgn0259113","FBgn0023181","FBgn0023180,FBgn0010173","FBgn0033690","FBgn0005696","FBgn0030871","FBgn0002905","FBgn0035644","FBgn0032244","FBgn0015271","FBgn0264326","FBgn0015270","FBgn0259676","FBgn0031875","FBgn0040268","FBgn0010173","FBgn0002906","FBgn0263600","FBgn0027903","FBgn0261530","FBgn0283467","FBgn0003479","FBgn0266666","FBgn0266421","FBgn0034728","FBgn0032906","FBgn0003480","FBgn0010438","FBgn0033549,FBgn0010173","FBgn0015553","FBgn0262619","FBgn0002707","FBgn0028515","FBgn0041627","FBgn0003479","FBgn0030931","FBgn0266421","FBgn0032906","FBgn0027375","FBgn0003480","FBgn0033389","FBgn0011774","FBgn0030506","FBgn0040290","FBgn0010173","FBgn0015553","FBgn0262619","FBgn0036486","FBgn0263600","FBgn0027903","FBgn0004913","FBgn0283467","FBgn0260985","FBgn0266421","FBgn0032906","FBgn0030871","FBgn0032244","FBgn0010438","FBgn0011659","FBgn0015546,FBgn0010173","FBgn0261109","FBgn0262619","FBgn0022936","FBgn0002707","FBgn0263600","FBgn0261850","FBgn0027903","FBgn0264326","FBgn0004913","FBgn0283467","FBgn0260985","FBgn0002887","FBgn0024956","FBgn0004832","FBgn0266421","FBgn0028434","FBgn0032906","FBgn0033929","FBgn0030871","FBgn0035644","FBgn0032244","FBgn0034726FBgn0002906","FBgn0011774","FBgn0259113","FBgn0037338","FBgn0030506","FBgn0041627","FBgn0028515,FBgn0040268","FBgn0037384","FBgn0002906","FBgn0002707","FBgn0037141","FBgn0039065","FBgn0027868","FBgn0003479","FBgn0266666","FBgn0034728","FBgn0027375","FBgn0002891","FBgn0050169","FBgn0266282","FBgn0052438")
+GO_grep_IDs <- GO_grep_IDs[!duplicated(GO_grep_IDs)]
+#86 genes,  79 is present in our dataset
+
+nrow(gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$FBgnID %in% GO_grep_IDs,]) #54 genes marked on the graph 
+
+### W vs UpfNos
+tmpGraph_UN_DNArep <- ggplot(gnsRSEMEdgeR_WVsUpfNos)+
+  geom_point(aes(logTPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+
+  geom_point(data = gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$FBgnID %in% GO_grep_IDs,],aes(logCPM,logFC),color="black")+
+  annotate("text",x = 15,y=13,label="Upf1-Nos vs. WT", col="black",size=annotationSize,hjust = 1)+
+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+
+  annotate("text",15,8,label=formatPercentage(gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$sigUp,],gnsRSEMEdgeR_WVsUpfNos), col=hlines_col,size=annotationSize,hjust = 1)+
+  annotate("text",15,-8,label=formatPercentage(gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$sigDep,],gnsRSEMEdgeR_WVsUpfNos), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*" (Transcript per Million)"))+ylab(expression("log"[2]*" (Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_UN_DNArep
+
+ggsave(filename = "Upf1Nos_Preprocess_Figures/marksOnSmear_UN_DNArep.pdf",plot = tmpGraph_UN_DNArep,width = 6,height = 4.5)
+write.csv(gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$FBgnID %in% GO_grep_IDs,],file = "marksOnSmear_UN_DNArep.csv",quote = F)
+
+
+```
+
+
+## marksOnSmear Spliceosome
+
+```{r}
+
+markPointSize <- 2
+labelSize <- 4
+tmpPointSize <- 0.4
+
+Spliceosome_FlyBase_IDs <- read.delim(file = "Data/marksOnSmear_UN_spliceosome_IDs.csv",sep = ",",header = F)[,1]
+
+tmpGraph_UN_spliceosomerep <- ggplot(gnsRSEMEdgeR_WVsUpfNos)+geom_point(aes(logTPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  geom_point(data = gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$FBgnID %in% Spliceosome_FlyBase_IDs,],aes(logCPM,logFC),color="black")+
+  annotate("text",x = 15,y=13,label="Upf1-Nos vs. WT", col="black",size=annotationSize,hjust = 1)+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=formatPercentage(gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$sigUp,],gnsRSEMEdgeR_WVsUpfNos), col=hlines_col,size=annotationSize,hjust = 1)+
+  annotate("text",15,-8,label=formatPercentage(gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$sigDep,],gnsRSEMEdgeR_WVsUpfNos), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*" (Transcript per Million)"))+ylab(expression("log"[2]*" (Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_UN_spliceosomerep
+
+ggsave(filename = "Upf1Nos_Preprocess_Figures/marksOnSmear_UN_spliceosome.pdf",plot = tmpGraph_UN_spliceosomerep,width = 6,height = 4.5)
+
+write.csv(gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$FBgnID %in% Spliceosome_FlyBase_IDs,],file = "marksOnSmear_UN_spliceosome.csv",quote = F)
+```
+
+# -------- Comps ------------------
+
+# comp Gerber 2006
+```{r}
+compGns <- makeCompleteGeneList()
+Gerber <- read.xlsx("Data/37_Cmp_Gerber_2006/09260Table2.xlsx", sheet=1,startRow = 2,colNames = T,check.names = T)
+
+tmp_Gerber_convertedIDs <- read.table("Data/37_Cmp_Gerber_2006/09260Table2_converted.txt",stringsAsFactors = F,header = T)[,1:2]
+tmp_Gerber_convertedIDs <- tmp_Gerber_convertedIDs[!duplicated(tmp_Gerber_convertedIDs$current_id),]
+tmp_Gerber_convertedIDs <- tmp_Gerber_convertedIDs[!duplicated(tmp_Gerber_convertedIDs$submitted_id),]
+Gerber <- merge(Gerber,tmp_Gerber_convertedIDs,by.x="CG",by.y="submitted_id")
+colnames(Gerber)[ncol(Gerber)] <- "FBgnID"
+Gerber$Gerber <- T
+Gerber <- Gerber[Gerber$FDR < 0.1,]
+
+cmpDataGnsUN <- merge(compGns, Gerber,by="FBgnID",all.x=T)
+cmpDataGnsUN$Gerber[is.na(cmpDataGnsUN$Gerber)] <- F
+nrow(cmpDataGnsUN[cmpDataGnsUN$Gerber,])
+cmpDataGnsUN$Pum.aff..isolation..log2.ratio.[is.na(cmpDataGnsUN$Pum.aff..isolation..log2.ratio.)] <- 0
+cmpDataGnsUN$SAM.score..d.[is.na(cmpDataGnsUN$SAM.score..d.)] <- 0
+
+
+# calc a p-value
+nrow(cmpDataGnsUN)
+nrow(cmpDataGnsUN[cmpDataGnsUN$Gerber,])
+nrow(cmpDataGnsUN[cmpDataGnsUN$Gerber & cmpDataGnsUN$sigDep_UpfNos,])
+nrow(cmpDataGnsUN[cmpDataGnsUN$Gerber & cmpDataGnsUN$notReg_UpfNos,])
+nrow(cmpDataGnsUN[cmpDataGnsUN$Gerber & cmpDataGnsUN$sigUp_UpfNos,])
+
+nrow(cmpDataGnsUN)
+nrow(cmpDataGnsUN[cmpDataGnsUN$sigDep_UpfNos,])
+nrow(cmpDataGnsUN[cmpDataGnsUN$notReg_UpfNos,])
+nrow(cmpDataGnsUN[cmpDataGnsUN$sigUp_UpfNos,])
+
+fisher.test(matrix(c( (635-293) ,293, (6601-2572-74),2572),nrow = 2,byrow = T), alternative="two.sided")
+
+nrow(cmpDataGnsUN[cmpDataGnsUN$Gerber,])
+
+# plot
+barcodeplot(cmpDataGnsUN$logFC_UpfNos, cmpDataGnsUN$Gerber, 
+            alpha = 0.4,quantiles = c(-1,1), main=expression("Upf1-Nos, Pum targets from Gerber"),
+            labels = c("Most Depleted","Least Depleted"),xlab=expression("log"[2]*"(Fold Change) in Upf1-Nos"))
+barcodeplot(cmpDataGnsUN$logFC_UpfNos, gene.weights=cmpDataGnsUN$SAM.score..d., weights.label="SAM scorre",
+            alpha = 0.4,quantiles = c(-1,1), main=expression("Upf1-Nos, gerber"),
+            labels = c("Most Depleted","Least Depleted"),xlab=expression("log"[2]*"(Fold Change) in Upf1-Nos"))
+cameraPR(cmpDataGnsUN$logFC_UpfNos, cmpDataGnsUN$Gerber)
+
+
+barcodeplot(cmpDataGnsUN$logFC_UpfNos, cmpDataGnsUN$Gerber, 
+            alpha = 0.4,quantiles = c(-1,1), 
+            main=bquote(atop( "Upf1-Nos, Pum targets from Gerber et al., 2006", .(paste0("(", paste0(cameraPR(cmpDataGnsUN$logFC_UpfNos, cmpDataGnsUN$Gerber), collapse = ";"), ")")))), 
+            labels = c("",""),xlab=expression("log"[2]*"(Fold Change) in Upf1-Nos"))
+saved_plot <- recordPlot()
+
+pdf("Upf1Nos_Preprocess_Figures/bcplot_Gerber_Upf1Nos_pum2.pdf",width = 12, height = 8, pointsize = 18)
+replayPlot(saved_plot)
+dev.off()
+cameraPR(cmpDataGnsUN$logFC_UpfNos, cmpDataGnsUN$Gerber)
+
+
+
+barcodeplot(cmpDataGnsUN$logFC_UNL7, cmpDataGnsUN$Gerber, 
+            alpha = 0.4,quantiles = c(-1,1), 
+            main=bquote(atop("Upf1-Nos"^L7~", Pum targets from Gerber et al., 2006", .(paste0("(", paste(cameraPR(cmpDataGnsUN$logFC_UNL7, cmpDataGnsUN$Gerber), collapse = ";"), ")")))),
+            labels = c("Most Depleted","Least Depleted"),xlab=expression("log"[2]*"(Fold Change) in Upf1-Nos"^L7))
+
+saved_plot <- recordPlot()
+
+pdf("Upf1Nos_Preprocess_Figures/bcplot_Gerber_UNL7_pum.pdf",width = 12, height = 8, pointsize = 18)
+replayPlot(saved_plot)
+dev.off()
+cameraPR(cmpDataGnsUN$logFC_UNL7, cmpDataGnsUN$Gerber)
+
+
+nrow(cmpDataGnsUN[cmpDataGnsUN$Gerber==T,])
+nrow(cmpDataGnsUN[cmpDataGnsUN$Gerber==T & cmpDataGnsUN$sigDep_UpfNos,])
+nrow(cmpDataGnsUN[cmpDataGnsUN$Gerber==T & cmpDataGnsUN$sigFDR_UpfNos,])
+nrow(cmpDataGnsUN[cmpDataGnsUN$Gerber==T & cmpDataGnsUN$logFC_UpfNos <0,])
+
+nrow(cmpDataGnsUN[ cmpDataGnsUN$sigDep_UpfNos,])
+
+nrow(cmpDataGnsUN[cmpDataGnsUN$sigDep_UpfNos,])
+nrow(cmpDataGnsUN[cmpDataGnsUN$sigFDR_UpfNos,])
+nrow(gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$sigDep,]) 
+
+
+```
+
+
+
+# comp Laver 2015
+
+## merging using Updated.FBgn.ID..FlyBase.release.5.56.
+```{r}
+compGns <- makeCompleteGeneList()
+tmp_Laver_RIP_Pum <- read.xlsx("Data/40_Cmp_Laver_2015/13059_2015_659_MOESM3_ESM.xlsx", sheet=1,startRow = 3,colNames = T,check.names = T)
+tmp_Laver_RIP_Pum <- tmp_Laver_RIP_Pum[!duplicated(tmp_Laver_RIP_Pum[,2]),]
+tmp_Laver_RIP_Pum$Laver <- T
+cmpDataGnsUN <- merge(compGns, tmp_Laver_RIP_Pum,by.x=1,by.y=2,all.x=T)
+cmpDataGnsUN$Laver[is.na(cmpDataGnsUN$Laver)] <- F
+
+cameraPR(cmpDataGnsUN$logFC_UpfNos, cmpDataGnsUN$Laver)
+barcodeplot(cmpDataGnsUN$logFC_UpfNos, cmpDataGnsUN$Laver, 
+            alpha = 0.4,quantiles = c(-1,1), 
+            main=bquote(atop( "Upf1-Nos, Pum targets from Laver et al., 2015", .(paste0("(", paste0(cameraPR(cmpDataGnsUN$logFC_UpfNos, cmpDataGnsUN$Laver), collapse = ";"), ")")))), 
+            labels = c("",""),xlab=expression("log"[2]*"(Fold Change) in Upf1-Nos"))
+
+saved_plot <- recordPlot()
+pdf("Upf1Nos_Preprocess_Figures/bcplot_Laver_Upf1Nos_pum.pdf",width = 12, height = 8, pointsize = 18)
+replayPlot(saved_plot)
+dev.off()
+
+```
+
+
+# Comp Flora 2018 
+```{r}
+compGns <- makeCompleteGeneList()
+
+compFlora_pumRNAi <- read.xlsx("Data/40_Cmp_Flora_2018/mmc2.xlsx", sheet=1, startRow = 3, colNames = T, check.names = T)
+compFlora_bruRNAi <- read.xlsx("Data/40_Cmp_Flora_2018/mmc2.xlsx", sheet=2, startRow = 3, colNames = T, check.names = T)
+compFlora_bothRNAi <- read.xlsx("Data/40_Cmp_Flora_2018/mmc2.xlsx", sheet=3,startRow = 3, colNames = T, check.names = T)
+
+compGns$inPumRNAiFlora <- compGns$FBgnID %in% compFlora_pumRNAi$Flybase.ID
+compGns$inBruRNAiFlora <- compGns$FBgnID %in% compFlora_bruRNAi$Flybase.ID
+compGns$inBothRNAiFlora <- compGns$FBgnID %in% compFlora_bothRNAi$Flybase.ID
+
+nrow(compGns[compGns$inPumRNAiFlora,])
+nrow(compGns[compGns$inBruRNAiFlora,])
+nrow(compGns[compGns$inBothRNAiFlora,])
+
+# calc a p-value UpfNos
+nrow(compGns[compGns$inBruRNAiFlora,])
+nrow(compGns[compGns$inBruRNAiFlora & compGns$sigDep_UpfNos,])
+nrow(compGns[compGns$inBruRNAiFlora & compGns$notReg_UpfNos,])
+nrow(compGns[compGns$inBruRNAiFlora & compGns$sigUp_UpfNos,])
+
+nrow(compGns)
+nrow(compGns[compGns$sigDep_UpfNos,])
+nrow(compGns[compGns$notReg_UpfNos,])
+nrow(compGns[compGns$sigUp_UpfNos,])
+
+fisher.test(matrix(c( (708-244-20) ,244, (6550-2554-74),2554),nrow = 2,byrow = T),alternative="two.sided") # p-value = 0.04402
+
+# calc a p-value UNL7
+nrow(compGns[compGns$inBruRNAiFlora,])
+nrow(compGns[compGns$inBruRNAiFlora & compGns$sigDep_UNL7,])
+nrow(compGns[compGns$inBruRNAiFlora & compGns$notReg_UNL7,])
+nrow(compGns[compGns$inBruRNAiFlora & compGns$sigUp_UNL7,])
+
+nrow(compGns)
+nrow(compGns[compGns$sigDep_UNL7,])
+nrow(compGns[compGns$notReg_UNL7,])
+nrow(compGns[compGns$sigUp_UNL7,])
+
+fisher.test(matrix(c( (708-73-7) ,73, (6550-170-66),170),nrow = 2,byrow = T),alternative="two.sided")
+fisher.test(matrix(c( (708-73-628) ,628, (6550-6314-66),6314),nrow = 2,byrow = T),alternative="two.sided")
+
+
+compGns$logFC_UNL7 <- round(compGns$logFC_UNL7,digits = 2)
+compGns$logFC_UpfNos <- round(compGns$logFC_UpfNos,digits = 2)
+
+
+barcodeplot(compGns$logFC_UNL7,compGns$inBruRNAiFlora,quantiles = c(-1,1), cex.main=1.5, 
+            # main=expression("Upf1-Nos"^L7),
+            main=bquote(atop("Upf1-Nos"^L7, .(paste0("(", paste(cameraPR(compGns$logFC_UNL7, compGns$inBruRNAiFlora), collapse = ";"), ")")))), 
+            labels = c("",""), xlab=expression("log"[2]*"(Fold Change)"))
+saved_plot <- recordPlot()
+
+pdf("Upf1Nos_Preprocess_Figures/bcplot_thesis_Flora_UNL7_bru.pdf",width = 12, height = 8, pointsize = 18)
+replayPlot(saved_plot)
+dev.off()
+cameraPR(compGns$logFC_UNL7,compGns$inBruRNAiFlora)
+
+
+barcodeplot(compGns$logFC_UpfNos,compGns$inBruRNAiFlora ,quantiles = c(-1,1), cex.main=1.5,
+            # main=expression("Upf1-Nos"),
+            main=bquote(atop("Upf1-Nos", .(paste0("(", paste(cameraPR(compGns$logFC_UpfNos, compGns$inBruRNAiFlora), collapse = ";"), ")")))),
+            labels = c("",""),xlab=expression("log"[2]*"(Fold Change)"))
+saved_plot <- recordPlot()
+
+pdf("Upf1Nos_Preprocess_Figures/bcplot_thesis_Flora_UpfNos_bru.pdf",width = 12, height = 8, pointsize = 18)
+replayPlot(saved_plot)
+dev.off()
+cameraPR(compGns$logFC_UpfNos,compGns$inBruRNAiFlora)
+
+
+
+```
+
+
+# comp Tadros 2007 Dev Cell
+```{r}
+
+compGns <- makeCompleteGeneList()
+Tadros_data <- read.xlsx("Data/40_Cmp_Tadros_2007/TadrosTable.xlsx", sheet=1,startRow = 1,colNames = T,check.names = T)
+Tadros_data$Tadros <- T
+Tadros_data$smgDependent <- ifelse(is.na(Tadros_data$smgDependent),F,T)
+cmpDataGnsUN <- merge(compGns, Tadros_data,by="FBgnID",all.x=T)
+cmpDataGnsUN$Tadros[is.na(cmpDataGnsUN$Tadros)] <- F
+cmpDataGnsUN$smgDependent[is.na(cmpDataGnsUN$smgDependent)] <- F
+
+
+barcodeplot(cmpDataGnsUN$logFC_UpfNos, cmpDataGnsUN$Tadros,
+            main=bquote(atop("Upf1-Nos, Tadros all targets", .(paste0("(", paste(cameraPR(cmpDataGnsUN$logFC_UpfNos, cmpDataGnsUN$Tadros), collapse = ";"), ")")))), 
+            quantiles = c(-1,1), labels = c("",""),xlab=expression("log"[2]*"(Fold Change)"))
+saved_plot <- recordPlot()
+
+pdf("Upf1Nos_Preprocess_Figures/bcplot_Tadros_all_targets.pdf",width = 12, height = 8, pointsize = 18)
+replayPlot(saved_plot)
+dev.off()
+
+
+```
+
+
+# GO gene list - 2022
+```{r }
+
+# all genes
+tmp <- gnsRSEMEdgeR_WVsUpfNos
+write(tmp$FBgnID,file = paste0("GO/GO_ExpressedGenes_",nrow(tmp),".txt"))
+
+# depleted genes
+tmp <- gnsRSEMEdgeR_WVsUpfNos[gnsRSEMEdgeR_WVsUpfNos$sigDep,]
+write(tmp$FBgnID,file = paste0("GO/GO_WvsUN_depleted_lfc1_",nrow(tmp),".txt"))
+
+# Upf1
+# all genes
+tmp <- gnsRSEMEdgeR_WVsUpf
+write(tmp$FBgnID,file = paste0("GO_ExpressedGenes_",nrow(tmp),".txt"))
+
+# depleted genes
+tmp <- gnsRSEMEdgeR_WVsUpf[gnsRSEMEdgeR_WVsUpf$sigDep,]
+write(tmp$FBgnID,file = paste0("GO/GO_WvsUpf_depleted_lfc1_",nrow(tmp),".txt"))
+
+# Nos
+# all genes
+tmp <- gnsRSEMEdgeR_WVsNos
+write(tmp$FBgnID,file = paste0("GO_ExpressedGenes_",nrow(tmp),".txt"))
+
+# depleted genes
+tmp <- gnsRSEMEdgeR_WVsNos[gnsRSEMEdgeR_WVsNos$sigDep,]
+write(tmp$FBgnID,file = paste0("GO/GO_WvsNos_depleted_lfc1_",nrow(tmp),".txt"))
+
+
+
+```
+
+
+
+# --------------------------
+# Bgal graphs
+# --------------------------
+
+```{r }
+formula <- y ~ x
+theme_set(theme_bw(base_size = 18))
+
+fancy_scientific <- function(x) {
+  ind <- which(x==1)
+  print(x)
+  # print(ind)
+  x <- as.character(scales::scientific_format()(x))
+  parsedX <- parse(text=paste0("10^", substr(x, start = nchar(x)-1, stop = nchar(x) )))
+  if(length(ind)>0)
+    if(ind>0)
+      parsedX[ind] <- "1"
+  return(parsedX)
+}
+
+fancy_scientificTrunc <- function(x,cv=100) {
+  print(x)
+  correctVals <- fancy_scientific(x*cv)
+  return(correctVals)
+}
+
+fancy_scientificTrunc3K <- function(x,cv=1000) {
+  print(x)
+  correctVals <- fancy_scientific(x*cv)
+  return(correctVals)
+}
+
+fancy_scientific_logged <- function(x) {
+  ind <- which(x==0)
+  parsedX <- parse(text=paste0("10^", x))
+  if(length(ind)>0)
+    if(ind>0)
+      parsedX[ind] <- "1"
+  return(parsedX)
+}
+
+
+```
+
+
+
+# Bruno
+
+
+# 3H Bruno #50.
+```{r bar_graphs_50}
+
+figNum <- 50
+raw_Data <- read.xlsx("Data/bGalFiguresData.xlsx", sheet=1,startRow = 1,colNames = T,check.names = T)
+raw_Data <- raw_Data %>% arrange(fig) %>% filter(!is.na(fig)) %>% select(c(1:12)) %>% mutate(Avg=as.numeric(Avg),StDev=as.numeric(StDev))
+
+tmp_Data <- raw_Data  %>% filter(fig==figNum) %>% arrange(lb_order)
+
+colWidth <- 0.9
+bGal_palette <- c("#2CA02CFF", #green
+                  "#1F77B4FF", #Blue
+                  "#FF7F0EFF", #orange
+                  "#868686FF" #gray
+                  )
+
+bg_Data <- raw_Data  %>% filter(fig==figNum) %>% arrange(lb_order)
+yInterceptVal <- bg_Data$Avg[1]
+
+bg_Data$cat <- factor(bg_Data$cat,levels =rev(c("pGAD",'"3x BRE"^"+"','"3x BRE"^"mut"','"2x NRE"^"hb"')),ordered = T)
+
+barBorderColors <- "gray60"
+barBorderColors <- rev(darken(c("#FF7F0EFF","#1F77B4FF","#FF7F0EFF","#1F77B4FF","#FF7F0EFF","#1F77B4FF","#2CA02CFF"),0.3))
+
+division <- 10
+bGal3Hall <- bg_Data %>% mutate(Avg=(Avg/division), StDev=(StDev/division) ) %>% filter(is.na(para)) %>% ggplot(aes(x = reorder(Label, rev(lb_order)), y = Avg, fill=cat ))+
+  geom_col(width=colWidth,position=position_dodge2(colWidth,preserve = "single"),col=barBorderColors)+
+  geom_errorbar(aes(ymin=Avg-StDev, ymax=Avg+StDev), width=.2, position=position_dodge(colWidth), color="black")+
+  geom_hline(yintercept = yInterceptVal/division,col="gray20",linetype="dashed")+
+  theme_classic(base_size = 12) + coord_flip()+
+  theme(legend.text.align = 0)+
+  scale_y_log10(position = "right",breaks=c(1,10,100,1000,10000,100000),
+                 labels = fancy_scientific,expand = c(0,0)) +
+  expand_limits(y=c(1,(100000/division) ))+
+  scale_x_discrete(labels = ggplot2:::parse_safe)+
+  guides(fill = guide_legend(reverse = TRUE, title=""))+
+  scale_fill_manual(values = bGal_palette,labels = ggplot2:::parse_safe)+
+  labs(title=NULL, x=NULL, y = expression(beta*"-Gal. Activity (Normalized RLU)"))
+
+bGal3Hall
+
+ggsave(filename = paste0("Upf1Nos_Preprocess_Figures/",figNum,"_","bGal3HBruno-7x4.pdf"),plot = bGal3Hall,width = 7,height = 4)
+
+```
+
+
+# 4H Bruno  #51.
+```{r bar_graphs_51}
+
+figNum <- 51
+raw_Data <- read.xlsx("Data/bGalFiguresData.xlsx", sheet=1,startRow = 1,colNames = T,check.names = T)
+raw_Data <- raw_Data %>% arrange(fig) %>% filter(!is.na(fig)) %>% select(c(1:12)) %>% mutate(Avg=as.numeric(Avg),StDev=as.numeric(StDev))
+
+colWidth <- 0.65
+bGal_palette <- c("#1F77B4FF", #Blue
+                  "#FF7F0EFF", #orange
+                  "#2CA02CFF", #green
+                  "#868686FF" #gray
+                  )
+
+bg_Data <- raw_Data  %>% filter(fig==figNum) %>% arrange(lb_order)
+yInterceptVal <- bg_Data$Avg[1]
+
+bg_Data$cat <- factor(bg_Data$cat,levels =rev(c("pGAD",'"3x BRE"^"+"','"3x BRE"^"mut"','"2x NRE"^"hb"')),ordered = T)
+
+barBorderColors <- "gray60"
+barBorderColors <- rev(darken(c(rep("#FF7F0EFF",5),"#1F77B4FF","#FF7F0EFF","#FF7F0EFF","#1F77B4FF"),0.3))
+
+division <- 10
+negYadj <- -0.55
+bGal3Hall <- bg_Data %>% mutate(Avg=(Avg/division), StDev=(StDev/division) )  %>% filter(is.na(para)) %>% ggplot(aes(x = reorder(Label, rev(lb_order)), y = log10(Avg), fill=cat ))+
+  geom_col(width=colWidth,position=position_dodge2(colWidth,preserve = "single"),col=barBorderColors)+
+  geom_errorbar(aes(ymin=log10(Avg-StDev), ymax=log10(Avg+StDev)), width=.2, position=position_dodge(colWidth), color="black")+
+  geom_hline(yintercept = log10(yInterceptVal/division),col="gray20",linetype="dashed")+
+  theme_classic(base_size = 12) +
+  theme(legend.text.align = 0,plot.margin = unit(c(0.2,0.2,0.2,2), "lines"))+
+  guides(fill = guide_legend(reverse = TRUE, title=""))+
+  scale_y_continuous(position = "right",labels = fancy_scientific_logged,expand = c(0,0))+
+  coord_flip(clip = "off",ylim=log10(c(1,10000/division)))+
+  scale_x_discrete(labels = ggplot2:::parse_safe)+
+  scale_fill_manual(values = bGal_palette,labels = ggplot2:::parse_safe)+
+  annotate(geom = "text", x = 6, y = negYadj-0.15, label = deparse(bquote("+ NLS-Bru-C"^366)), parse = TRUE, size = 4,angle = 90)+
+  annotate("segment", x = 3.5, xend = 9.2, y = negYadj, yend = negYadj) +
+  annotate(geom = "text", x = 1.5, y = negYadj-0.15, label = "+ pNLS", size = 3.5,angle = 90)+
+  annotate("segment", x = 0.5, xend = 2.3, y = negYadj, yend = negYadj) +
+  labs(title=NULL, x=NULL, y = expression(beta*"-Gal. Activity (Normalized RLU)"))
+bGal3Hall
+ggsave(filename = paste0("Upf1Nos_Preprocess_Figures/",figNum,"_","bGal4HBru-7x5.pdf"),plot = bGal3Hall,width = 7,height = 5)
+
+```
+
+
+
+# 2H Bruno-Nos #52 & 54
+```{r bar_graphs_52_54}
+
+colWidth <- 0.8
+
+figNum <- 52
+raw_Data <- read.xlsx("Data/bGalFiguresData.xlsx", sheet=1,startRow = 1,colNames = T,check.names = T)
+raw_Data <- raw_Data %>% arrange(fig) %>% filter(!is.na(fig)) %>% select(c(1:12)) %>% mutate(Avg=as.numeric(Avg),StDev=as.numeric(StDev))
+bGal_palette <- c(#"#925E9FFF", #purple
+                  "#1F77B4FF", #Blue
+                  "#FF7F0EFF", #orange
+                  "#2CA02CFF", #green
+                  "#868686FF" #gray
+                  )
+bg_Data <- raw_Data  %>% filter(fig==figNum) %>% arrange(lb_order)
+yInterceptVal <- bg_Data$Avg[1]
+
+division <- 100
+divisionTicks <- 100
+barBorderColors <- rev(darken(rep(bGal_palette[2:1],4),0.3))
+bGal2H52 <- bg_Data %>% mutate(Avg=(Avg/division), StDev=(StDev/division) ) %>% filter(is.na(para) ) %>% ggplot(aes(x = reorder(Label, rev(lb_order)), y = Avg, fill=cat ))+
+  geom_col(width=colWidth,position=position_dodge2(colWidth,preserve = "single"), col=barBorderColors)+
+  geom_errorbar(aes(ymin=Avg-StDev, ymax=Avg+StDev), width=.2, position=position_dodge(colWidth), color="black")+
+  geom_hline(yintercept = yInterceptVal/division,col="gray20",linetype="dashed")+
+  theme_classic(base_size = 14) + coord_flip()+
+  scale_y_log10(position = "right",breaks = c(1,10,100,1000,10000),
+                 labels = fancy_scientific,expand = c(0,0)) +
+  expand_limits(y=c(1,(100000/divisionTicks) ))+
+  guides(fill = guide_legend(reverse = TRUE, title=""))+
+  theme(legend.text.align = 0,plot.margin = unit(c(0.2,1,0.2,0.7), "lines"))+
+  scale_x_discrete(labels = ggplot2:::parse_safe)+
+  scale_fill_manual(values = bGal_palette,labels = ggplot2:::parse_safe)+
+  labs(title=NULL, x=NULL,  y = expression(beta*"-Gal. Activity (Normalized RLU)"))
+bGal2H52
+ggsave(filename = paste0("Upf1Nos_Preprocess_Figures/",figNum,"_","bGal2HNosBruno-7x4.pdf"),plot = bGal2H52,width = 7,height = 4)
+  
+colWidth <- 0.55
+figNum <- 54
+raw_Data <- read.xlsx("Data/bGalFiguresData.xlsx", sheet=1,startRow = 1,colNames = T,check.names = T)
+raw_Data <- raw_Data %>% arrange(fig) %>% filter(!is.na(fig)) %>% select(c(1:12)) %>% mutate(Avg=as.numeric(Avg),StDev=as.numeric(StDev))
+bGal_palette <- c("#7876B1FF", #purple
+                  "#2CA02CFF", #green
+                  "#1F77B4FF", #Blue
+                  "#FF7F0EFF", #orange
+                  "#868686FF" #gray
+                  )
+bg_Data <- raw_Data  %>% filter(fig==figNum) %>% arrange(lb_order)
+yInterceptVal <- bg_Data$Avg[1]
+bGal2H54 <- bg_Data %>% mutate(Avg=(Avg/division), StDev=(StDev/division) ) %>% filter(is.na(para)) %>% ggplot(aes(x = reorder(Label, rev(lb_order)), y = Avg, fill=cat ))+
+  geom_col(width=colWidth,position=position_dodge2(colWidth,preserve = "total"), col=darken("#7876B1FF",0.3))+
+  geom_errorbar(aes(ymin=Avg-StDev, ymax=Avg+StDev), width=.2, position=position_dodge(colWidth), color="black")+
+  geom_hline(yintercept = yInterceptVal/division,col="gray20",linetype="dashed")+
+  theme_classic(base_size = 14) + coord_flip()+
+  scale_y_log10(position = "right",breaks = c(1,10,100,1000,10000),
+                 labels = fancy_scientific,expand = c(0,0)) +
+  expand_limits(y=c(1,(100000/divisionTicks) ))+
+  guides(fill = guide_legend(reverse = TRUE, title=""))+
+  theme(legend.text.align = 0,plot.margin = unit(c(0.2,0.2,0.2,0.6), "lines"))+
+  scale_x_discrete(labels = ggplot2:::parse_safe)+
+  scale_fill_manual(values = bGal_palette,labels = ggplot2:::parse_safe)+
+  labs(title=NULL, x=NULL, y = expression(beta*"-Gal. Activity (Normalized RLU)"))
+bGal2H54
+
+ggsave(filename = paste0("Upf1Nos_Preprocess_Figures/",figNum,"_","bGal2HBrunoNos-7x4.pdf"),plot = bGal2H54,width = 7,height = 4)
+
+
+```
+
+
+
+# --------------------------
+# Fig 6, w vs nos-
+# --------------------------
+
+
+# Gene Expression 
+Read output data of RSEM package.
+```{r Fig_6_gene_level:read_Data}
+
+wnos_genesRSEM_TPM <- read.table(file="Data/readcounts_w_vs_nos/46_RSEM_ENSMBL_6_22_96_genes_TPM_matrix.txt",stringsAsFactors = F)
+colnames(wnos_genesRSEM_TPM) <- unlist(strsplit(colnames(wnos_genesRSEM_TPM),".genes.results"))
+wnos_genesRSEM_TPM$avgTPM <- rowMeans(wnos_genesRSEM_TPM)
+wnos_genesRSEM_TPM$logTPM <- log(wnos_genesRSEM_TPM$avgTPM+0.1,2)
+wnos_genesRSEM_TPM <- geneID2name6_22_96_append(wnos_genesRSEM_TPM,1)
+rownames(wnos_genesRSEM_TPM) <- wnos_genesRSEM_TPM$FBgnID
+wnos_genesRSEM_TPM$FBgnID <- NULL
+
+wnos_genesRSEM <- read.table(file="Data/readcounts_w_vs_nos/46_RSEM_ENSMBL_6_22_96_genes_counts_matrix.txt",stringsAsFactors = F)
+colnames(wnos_genesRSEM) <- unlist(strsplit(colnames(wnos_genesRSEM),".genes.results"))
+wnos_genesRSEM <- geneID2name6_22_96_append(wnos_genesRSEM,1)
+rownames(wnos_genesRSEM) <- wnos_genesRSEM$FBgnID
+wnos_genesRSEM <- wnos_genesRSEM[,c(1,3:14,2)]
+
+wnos_genesRSEM$maternal <- FALSE
+wnos_genesRSEM[rownames(maternal_genes_onlyINwSamples),]$maternal <- TRUE
+nrow(wnos_genesRSEM[wnos_genesRSEM$maternal,]) # 6617
+
+# library("edgeR")
+alphaValue <- 0.05
+RNASeq_group <- factor(c(rep("w_01",3),rep("nos_01",3),rep("w_23",3),rep("nos_23",3)))
+wnos_genesMatrix <- as.matrix(wnos_genesRSEM[wnos_genesRSEM$maternal,c(2:13)]) # only include w_sorted_maternal genes
+wnos_genesMatrix <- wnos_genesMatrix[filterByExpr(wnos_genesMatrix, group=RNASeq_group,min.count = 30,min.total.count = 30),]
+nrow(wnos_genesMatrix)
+# out of 17714 genes in the readcounts file "46_RSEM_ENSMBL_6_22_96_genes_counts_matrix.txt", we have 8445 expressed genes (passing the filterByExpr), with 6605 maternal genes (78%)
+
+wnos_genesMatrix <- as.matrix(wnos_genesRSEM[ ,c(2:13)])
+wnos_genesMatrix <- wnos_genesMatrix[filterByExpr(wnos_genesMatrix, group=RNASeq_group,min.count = 30,min.total.count = 30),]
+nrow(wnos_genesMatrix) # 8445
+y_countPM <- as.data.frame(cpm(wnos_genesMatrix,lib.size = colSums(wnos_genesMatrix),normalized.lib.sizes = T, log = F))
+colSums(y_countPM)
+colSums(y_countPM[rownames(y_countPM) %in% wnos_genesRSEM$FBgnID[wnos_genesRSEM$maternal],])
+colSums(y_countPM[!(rownames(y_countPM) %in% wnos_genesRSEM$FBgnID[wnos_genesRSEM$maternal]),])
+
+mean(colSums(y_countPM[rownames(y_countPM) %in% wnos_genesRSEM$FBgnID[wnos_genesRSEM$maternal],])/colSums(y_countPM))
+mean(colSums(y_countPM[!(rownames(y_countPM) %in% wnos_genesRSEM$FBgnID[wnos_genesRSEM$maternal]),])/colSums(y_countPM))
+
+
+gns_y <- DGEList(counts=wnos_genesMatrix,group=RNASeq_group) 
+gns_y <- calcNormFactors(gns_y,logratioTrim=.4)
+gns_y <- estimateCommonDisp(gns_y,verbose = T)
+gns_y <- estimateTagwiseDisp(gns_y,verbose = T)
+
+gnset_w01VSw23 <- exactTest(gns_y, pair = c("w_01","w_23"))
+gnset_w01VSnos23 <- exactTest(gns_y, pair = c("w_01","nos_23"))
+
+gnset_w01VSnos01 <- exactTest(gns_y, pair = c("w_01","nos_01"))
+gnset_w23VSnos23 <- exactTest(gns_y, pair = c("w_23","nos_23"))
+gnset_nos01VSnos23 <- exactTest(gns_y, pair = c("nos_01","nos_23"))
+
+
+```
+
+## Create DBs:
+create DB
+```{r Fig_6_gene_level:create_DB}
+
+# w01VSw23
+gnsRSEMEdgeR_w01VSw23 <- xtrGenesWithGeneIDasAcolumn(gnset_w01VSw23,3,setSignificants = T,colIDName = "FBgnID")
+gnsRSEMEdgeR_w01VSw23 <- merge(gnsRSEMEdgeR_w01VSw23,wnos_genesRSEM[,-c(2:14)],by=1)
+gnsRSEMEdgeR_w01VSw23 <- merge(gnsRSEMEdgeR_w01VSw23,wnos_genesRSEM_TPM[,-c(2:13)],by.x=1,by.y=0,all.x=T)
+
+
+
+# w01VSnos23
+gnsRSEMEdgeR_w01VSnos23 <- xtrGenesWithGeneIDasAcolumn(gnset_w01VSnos23,3,setSignificants = T,colIDName = "FBgnID")
+gnsRSEMEdgeR_w01VSnos23 <- merge(gnsRSEMEdgeR_w01VSnos23,wnos_genesRSEM[,-c(2:14)],by=1)
+gnsRSEMEdgeR_w01VSnos23 <- merge(gnsRSEMEdgeR_w01VSnos23,wnos_genesRSEM_TPM[,-c(2:13)],by.x=1,by.y=0,all.x=T)
+
+# wVSnos01
+gnsRSEMEdgeR_w01VSnos01 <- xtrGenesWithGeneIDasAcolumn(gnset_w01VSnos01,3,setSignificants = T,colIDName = "FBgnID")
+gnsRSEMEdgeR_w01VSnos01 <- merge(gnsRSEMEdgeR_w01VSnos01,wnos_genesRSEM[,-c(2:14)],by=1)
+gnsRSEMEdgeR_w01VSnos01 <- merge(gnsRSEMEdgeR_w01VSnos01,wnos_genesRSEM_TPM[,-c(2:13)],by.x=1,by.y=0,all.x=T)
+
+
+# wVSnos23
+gnsRSEMEdgeR_w23VSnos23 <- xtrGenesWithGeneIDasAcolumn(gnset_w23VSnos23,3,setSignificants = T,colIDName = "FBgnID")
+gnsRSEMEdgeR_w23VSnos23 <- merge(gnsRSEMEdgeR_w23VSnos23,wnos_genesRSEM[,-c(2:14)],by=1)
+gnsRSEMEdgeR_w23VSnos23 <- merge(gnsRSEMEdgeR_w23VSnos23,wnos_genesRSEM_TPM[,-c(2:13)],by.x=1,by.y=0,all.x=T)
+
+
+# wVSnos01
+gnsRSEMEdgeR_nos01VSnos01 <- xtrGenesWithGeneIDasAcolumn(gnset_nos01VSnos23,3,setSignificants = T,colIDName = "FBgnID")
+gnsRSEMEdgeR_nos01VSnos01 <- merge(gnsRSEMEdgeR_nos01VSnos01,wnos_genesRSEM[,-c(2:14)],by=1)
+gnsRSEMEdgeR_nos01VSnos01 <- merge(gnsRSEMEdgeR_nos01VSnos01,wnos_genesRSEM_TPM[,-c(2:13)],by.x=1,by.y=0,all.x=T)
+
+
+# Nos dependent maternal targets (wVSnos23)
+gnsNosDepMaternalTargets <- xtrGenesWithGeneIDasAcolumn(gnset_w23VSnos23,3,setSignificants = T,AbLFC=0.5, colIDName = "FBgnID")
+gnsNosDepMaternalTargets <- merge(gnsNosDepMaternalTargets,wnos_genesRSEM[,-c(2:14)],by=1)
+gnsNosDepMaternalTargets <- merge(gnsNosDepMaternalTargets,wnos_genesRSEM_TPM[,-c(2:13)],by.x=1,by.y=0,all.x=T)
+
+
+###############  AbLFC=0.5
+# wVSnos01
+gnsRSEMEdgeR_w01VSnos01_AbLFC05 <- xtrGenesWithGeneIDasAcolumn(gnset_w01VSnos01,3,setSignificants = T,colIDName = "FBgnID", AbLFC=0.5)
+gnsRSEMEdgeR_w01VSnos01_AbLFC05 <- merge(gnsRSEMEdgeR_w01VSnos01_AbLFC05,wnos_genesRSEM[,-c(2:14)],by=1)
+gnsRSEMEdgeR_w01VSnos01_AbLFC05 <- merge(gnsRSEMEdgeR_w01VSnos01_AbLFC05,wnos_genesRSEM_TPM[,-c(2:13)],by.x=1,by.y=0,all.x=T)
+
+# wVSnos23
+gnsRSEMEdgeR_w23VSnos23_AbLFC05 <- xtrGenesWithGeneIDasAcolumn(gnset_w23VSnos23,3,setSignificants = T,colIDName = "FBgnID", AbLFC=0.5)
+gnsRSEMEdgeR_w23VSnos23_AbLFC05 <- merge(gnsRSEMEdgeR_w23VSnos23_AbLFC05,wnos_genesRSEM[,-c(2:14)],by=1)
+gnsRSEMEdgeR_w23VSnos23_AbLFC05 <- merge(gnsRSEMEdgeR_w23VSnos23_AbLFC05,wnos_genesRSEM_TPM[,-c(2:13)],by.x=1,by.y=0,all.x=T)
+
+
+sigGenes_w01VSnos01 <- subset(gnsRSEMEdgeR_w01VSnos01_AbLFC05,select=c(FBgnID,GeneName,maternal,avgTPM,logTPM,logCPM,logFC,FDR,sigFDR,nonSigFDR,sig,sigDep,sigUp,notReg,StrictNonSig,stat_status,status2,status3,status,status5))
+sigGenes_w23VSnos23 <- subset(gnsRSEMEdgeR_w23VSnos23_AbLFC05,select=c(FBgnID,logFC,FDR,sigFDR,nonSigFDR,sig,sigDep,sigUp,notReg,StrictNonSig,stat_status,status2,status3,status,status5))
+colnames(sigGenes_w01VSnos01) <- paste(colnames(sigGenes_w01VSnos01),"_w01VSnos01",sep = "")
+colnames(sigGenes_w23VSnos23) <- paste(colnames(sigGenes_w23VSnos23),"_w23VSnos23",sep = "")
+wVSnos_CompleteGeneSet <- merge(sigGenes_w01VSnos01,sigGenes_w23VSnos23,by = 1)
+colnames(wVSnos_CompleteGeneSet)[c(1:5)] <- c("FBgnID","GeneName","maternal","avgTPM","logTPM","logCPM")
+
+write.csv(wVSnos_CompleteGeneSet,file = "wVSnos_CompleteGeneSet.csv",quote = F)
+
+temp <- wnos_genesRSEM_TPM[rownames(wnos_genesRSEM_TPM) %in% wVSnos_CompleteGeneSet$FBgnID,]
+temp <- temp[,2:15]
+temp <- t(apply(temp[,c(1:12)], 1, function(eachRow){c(mean(eachRow[1:3]),mean(eachRow[4:6]),mean(eachRow[7:9]),mean(eachRow[10:12]))}))
+colnames(temp) <- c("w01","nos01","w23","nos23")
+temp <- as.data.frame(temp)
+temp$avgTPM <- rowMeans(temp)
+temp$logTPM <- log(temp$avgTPM+0.1,2)
+temp <- geneID2name6_22_96_append(temp,1)
+write.csv(temp,file="wVSnos_CompleteGeneSet_avgTPM_values.csv",quote = F)
+
+
+```
+
+
+# smear plots comparing nos- vs w at 0-1 and 2-3
+```{r Fig_6_smear}
+
+theme_set(theme_bw(base_size = 18))
+tmpPointSize <- 0.8
+point_color_alpha=1
+annotationSize <- 5
+
+###############  AbLFC=0.5
+### W vs UpfNos
+tmpGraph_w01nos01_05 <- ggplot(gnsRSEMEdgeR_w01VSnos01_AbLFC05)+geom_point(aes(logTPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=13,label=deparse(bquote('w'[(0-1)]*' vs. '*'nos'^'\U002D'*''[(0-1)])), parse = TRUE, col="black",size=annotationSize,hjust = 1)+ 
+  geom_hline(yintercept = c(0.5,-0.5),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(gnset_w01VSnos01,"u", lfc=0.5), col=hlines_col,size=annotationSize,hjust = 1)+annotate("text",15,-8,label=RSeqStat(gnset_w01VSnos01,"d", lfc=0.5), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_w01nos01_05
+
+### W vs UNL7
+tmpGraph_w23nos23_05 <- ggplot(gnsRSEMEdgeR_w23VSnos23_AbLFC05)+geom_point(aes(logTPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=13,label=deparse(bquote('w'[(2-3)]*' vs. '*'nos'^'\U002D'*''[(2-3)])), parse = TRUE, col="black",size=annotationSize,hjust = 1)+
+  geom_hline(yintercept = c(0.5,-0.5),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(gnset_w23VSnos23,"u", lfc=0.5), col=hlines_col,size=annotationSize,hjust = 1)+annotate("text",15,-8,label=RSeqStat(gnset_w23VSnos23,"d", lfc=0.5), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_w23nos23_05
+
+### W vs UpfNos
+tmpGraph_w01nos01_05_6x6 <- ggplot(gnsRSEMEdgeR_w01VSnos01_AbLFC05)+geom_point(aes(logTPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=5.5,label=deparse(bquote('w'[(0-1)]*' vs. '*'nos'^'\U002D'*''[(0-1)])), parse = TRUE, col="black",size=annotationSize,hjust = 1)+
+  geom_hline(yintercept = c(0.5,-0.5),col=hlines_col)+
+  annotate("text",15,4,label=RSeqStat(gnset_w01VSnos01,"u", lfc=0.5), col=hlines_col,size=annotationSize,hjust = 1)+annotate("text",15,-4,label=RSeqStat(gnset_w01VSnos01,"d", lfc=0.5), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-6,6), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_w01nos01_05_6x6
+
+### W vs UNL7
+tmpGraph_w23nos23_05_6x6 <- ggplot(gnsRSEMEdgeR_w23VSnos23_AbLFC05)+geom_point(aes(logTPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=5.5,label=deparse(bquote('w'[(2-3)]*' vs. '*'nos'^'\U002D'*''[(2-3)])), parse = TRUE, col="black",size=annotationSize,hjust = 1)+
+  geom_hline(yintercept = c(0.5,-0.5),col=hlines_col)+
+  annotate("text",15,4,label=RSeqStat(gnset_w23VSnos23,"u", lfc=0.5), col=hlines_col,size=annotationSize,hjust = 1)+annotate("text",15,-4,label=RSeqStat(gnset_w23VSnos23,"d", lfc=0.5), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*"(Transcript per Million)"))+ylab(expression("log"[2]*"(Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-6,6), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph_w23nos23_05_6x6
+
+library(gridExtra) 
+
+tmpGrob <- marrangeGrob(list(tmpGraph_w01nos01_05,tmpGraph_w23nos23_05,tmpGraph_w01nos01_05_6x6,tmpGraph_w23nos23_05_6x6),layout_matrix = matrix(seq_len(2*2),2,2,byrow = T), nrow=2,ncol = 2, top="Gene-Level Analysis")
+ggsave(filename = "Upf1Nos_Preprocess_Figures/w_vs_nos_smear_gene_level68_FDR5prc_logTPM.pdf",plot = tmpGrob, width = 12,height = 8,units = "in",scale = 1,dpi =300)
+
+
+
+```
+
+
+## check more graphs:
+```{r Fig_6_gene_level:checkGraphs}
+
+RSeqStat(gnset_w01VSnos01,"p")
+summary(de <- decideTestsDGE(gnset_w01VSnos01,adjust.method = "BH", lfc=1, p=alphaValue)) #
+summary(de <- decideTestsDGE(gnset_w01VSnos01,adjust.method = "BH", p=alphaValue)) #, lfc=1
+plotSmear(gnset_w01VSnos01, de.tags=rownames(gns_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue") 
+title("Genes: w(0-1) vs nos(0-1)")
+
+
+RSeqStat(gnset_w01VSnos23,"p")
+summary(de <- decideTestsDGE(gnset_w01VSnos23,adjust.method = "BH", lfc=1, p=alphaValue)) #
+summary(de <- decideTestsDGE(gnset_w01VSnos23,adjust.method = "BH", p=alphaValue)) #, lfc=1
+plotSmear(gnset_w01VSnos23, de.tags=rownames(gns_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue") 
+title("Genes: w(0-1) vs nos(2-3)")
+
+
+RSeqStat(gnset_w01VSw23,"p")
+summary(de <- decideTestsDGE(gnset_w01VSw23,adjust.method = "BH", lfc=1, p=alphaValue)) #
+summary(de <- decideTestsDGE(gnset_w01VSw23,adjust.method = "BH", p=alphaValue)) #, lfc=1
+plotSmear(gnset_w01VSw23, de.tags=rownames(gns_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue") 
+title("Genes: w(0-1) vs w(2-3)")
+
+
+RSeqStat(gnset_nos01VSnos23,"p")
+summary(de <- decideTestsDGE(gnset_nos01VSnos23,adjust.method = "BH", lfc=1, p=alphaValue)) #
+summary(de <- decideTestsDGE(gnset_nos01VSnos23,adjust.method = "BH", p=alphaValue)) #, lfc=1
+plotSmear(gnset_nos01VSnos23, de.tags=rownames(gns_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue") 
+title("Genes: nos(0-1) vs nos( 2-3)")
+
+
+RSeqStat(gnset_w23VSnos23,"p")
+summary(de <- decideTestsDGE(gnset_w23VSnos23,adjust.method = "BH", lfc=1, p=alphaValue)) #
+summary(de <- decideTestsDGE(gnset_w23VSnos23,adjust.method = "BH", p=alphaValue)) #, lfc=1
+plotSmear(gnset_w23VSnos23, de.tags=rownames(gns_y)[as.logical(de)])
+abline(h = c(-1, 1), col = "blue") 
+title("Genes: w(0-1) vs nos(2-3)")
+
+
+```
+## check smear plots:
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+
+```{r}
+theme_set(theme_bw(base_size = 18))
+tmpPointSize <- 0.8
+point_color_alpha=1
+annotationSize <- 5
+
+## w01 vs nos01
+tmpGraph <- ggplot(gnsRSEMEdgeR_w01VSnos01)+geom_point(aes(logCPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=13,label="w vs. w", col="black",size=annotationSize,hjust = 1)+
+  ggtitle("w (0-1) vs. nos (0-1), gene-level analysis")+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(gnset_w01VSw23,"u"), col=hlines_col,size=annotationSize,hjust = 1)+annotate("text",15,-8,label=RSeqStat(gnset_w01VSw23,"d"), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*" (Counts per Million Reads)"))+ylab(expression("log"[2]*" (Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph
+
+
+
+### w23 vs nos23
+tmpGraph <- ggplot(gnsRSEMEdgeR_w23VSnos23)+geom_point(aes(logCPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=13,label="w vs. nos", col="black",size=annotationSize,hjust = 1)+
+  ggtitle("w (2-3) vs. nos (2-3), genes")+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(gnset_w23VSnos23,"u"), col=hlines_col,size=annotationSize,hjust = 1)+annotate("text",15,-8,label=RSeqStat(gnset_w23VSnos23,"d"), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*" (Counts per Million Reads)"))+ylab(expression("log"[2]*" (Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph
+
+
+### w23 vs nos23 (maternal only)
+tmpGraph <- ggplot(gnsRSEMEdgeR_w23VSnos23[gnsRSEMEdgeR_w23VSnos23$maternal,])+geom_point(aes(logCPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=13,label="w vs. nos", col="black",size=annotationSize,hjust = 1)+
+  ggtitle("w (2-3) vs. nos (2-3), only maternal genes")+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(gnset_w23VSnos23,"u"), col=hlines_col,size=annotationSize,hjust = 1)+annotate("text",15,-8,label=RSeqStat(gnset_w23VSnos23,"d"), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*" (Counts per Million Reads)"))+ylab(expression("log"[2]*" (Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph
+
+
+## w01 vs w23
+tmpGraph <- ggplot(gnsRSEMEdgeR_w01VSw23)+geom_point(aes(logCPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=13,label="w vs. w", col="black",size=annotationSize,hjust = 1)+
+  ggtitle("w (0-1) vs. w (2-3), gene-level analysis")+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(gnset_w01VSw23,"u"), col=hlines_col,size=annotationSize,hjust = 1)+annotate("text",15,-8,label=RSeqStat(gnset_w01VSw23,"d"), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*" (Counts per Million Reads)"))+ylab(expression("log"[2]*" (Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph
+
+
+### w01 vs w23 (maternal only)
+tmpGraph <- ggplot(gnsRSEMEdgeR_w01VSw23[gnsRSEMEdgeR_w01VSw23$maternal,])+geom_point(aes(logCPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=13,label="w vs. w", col="black",size=annotationSize,hjust = 1)+
+  ggtitle("w (0-1) vs. w (2-3), only maternal genes")+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(gnset_w01VSw23,"u"), col=hlines_col,size=annotationSize,hjust = 1)+annotate("text",15,-8,label=RSeqStat(gnset_w01VSw23,"d"), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*" (Counts per Million Reads)"))+ylab(expression("log"[2]*" (Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph
+
+```
+
+
+
+
+
+```{r}
+RSeqStat(gnset_w23VSnos23,"p", lfc=1)
+```
+
+
+```{r}
+RSeqStat(gnset_w23VSnos23,"p", lfc=0.5)
+```
+
+
+```{r}
+RSeqStat(gnset_w23VSnos23,"p", lfc=0)
+```
+
+
+
+
+```{r}
+
+### w01 vs nos23
+tmpGraph <- ggplot(gnsRSEMEdgeR_w01VSnos01[gnsRSEMEdgeR_w01VSnos01$maternal,])+geom_point(aes(logCPM,logFC,color=stat_status,fill=stat_status),shape=16,alpha=point_color_alpha, size=tmpPointSize)+ 
+  annotate("text",x = 15,y=13,label="w vs. nos", col="black",size=annotationSize,hjust = 1)+
+  ggtitle("w (2-3) vs. nos (2-3), only maternal genes")+
+  geom_hline(yintercept = c(1,-1),col=hlines_col)+
+  annotate("text",15,8,label=RSeqStat(gnset_w01VSnos01,"u"), col=hlines_col,size=annotationSize,hjust = 1)+annotate("text",15,-8,label=RSeqStat(gnset_w01VSnos01,"d"), col=hlines_col,size=annotationSize,hjust = 1)+
+  xlab(expression("Average log"[2]*" (Counts per Million Reads)"))+ylab(expression("log"[2]*" (Fold Change)"))+
+  scale_colour_manual(values =smearplot_cb_palette)+
+  scale_y_continuous(limits =c(-14,14), minor_breaks = c(0.0000001))+
+  theme(panel.grid.major = element_blank(),panel.grid.minor.x=element_blank(),panel.grid.minor.y = element_line(colour="black", size = (0.5)),legend.position = "none",legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
+  guides(color = guide_legend(override.aes = list(size=4)))
+tmpGraph
+
+
+```
+
+```{r}
+RSeqStat(gnset_w01VSnos01,"p", lfc=1)
+```
+
+```{r}
+RSeqStat(gnset_w01VSnos01,"p", lfc=0.5)
+```
+
+
+
+
+# Generating helper data [that was being load as RData]
+
+```{r}
+
+FBgnID_FBtrID_BDGP6_22_96 <- read.delim(file="Data/dmel_ensembl_6_22_96/gene_transcript_names_IDs_6_22_96.csv",sep = ",",header = T,stringsAsFactors = F)
+
+all3UTR_pure <- fasta2dataframe_3UTR_split_with_underline("Data/dmel_ensembl_6_22_96/3UTRs_mart_export_noSeqUnavlbData.fasta.txt")
+colnames(all3UTR_pure)[which(colnames(all3UTR_pure)=="SeqID")] <- "TrID"
+all3UTRs_Ensembl_mart_6_22_96 <- all3UTR_pure
+
+all3UTRs_Ensembl_mart_6_22_96 <- utr_findSetPREsites(all3UTRs_Ensembl_mart_6_22_96,geneIDColumn="FBgnID",seqColumn="thUTRSeq",
+        inSiteSeqNames=c("NBSPRE","BBS","Bru","weidmannNBSPRE","mmNBSPRE","NBSPRE4nt","weidmannNBSPRE4nt","mmNBSPRE4nt","UGUA","scrambledNBSPRE","rcompPRE","rcompNBSPRE"), # "scrambledBru",scrambledBru_Seq, "rcompBru",rcompCoreBru_Seq, CorePRE_Seq has been implemented in the function
+        inSiteSeqs=c(NBSPRE_Seq,CoreBBS_Seq,CoreBru_Seq,weidmannNBSPRE_Seq,mmNBSPRE_Seq,NBSPRE4nt_Seq,weidmannNBSPRE4nt_Seq,mmNBSPRE4nt_Seq,"TGTA",scrambledNBSPRE_Seq,rcompPRE_Seq,rcompNBSPRE_Seq),
+        setGeneIsoformsInfo=F,useNegativeForNotFindi = F)
+
+allCDS_r6_22 <- fasta2dataframe_CDS("Data/dmel_ensembl_6_22_96/dmel-all-CDS-r6.22.fasta")
+allCDS_r6_22$CDSlog2SeqLength <- log(allCDS_r6_22$CDSSeqLength,2)
+allCDS_r6_22 <- utr_findSetPREsites(allCDS_r6_22,inSiteSeqNames=c("NBSPRE","BBS","Bru","weidmannNBSPRE","mmNBSPRE","NBSPRE4nt","weidmannNBSPRE4nt","mmNBSPRE4nt","UGUA","scrambledNBSPRE","rcompPRE","rcompNBSPRE"), #,"scrambledBru","rcompBru","Brat","Bru2Ts" # CorePRE_Seq has been implemented in the function
+                                      inSiteSeqs=c(NBSPRE_Seq,CoreBBS_Seq,CoreBru_Seq,weidmannNBSPRE_Seq,mmNBSPRE_Seq,NBSPRE4nt_Seq,weidmannNBSPRE4nt_Seq,mmNBSPRE4nt_Seq,"TGTA",scrambledNBSPRE_Seq,rcompPRE_Seq,rcompNBSPRE_Seq), #,scrambledBru_Seq,rcompCoreBru_Seq,Loedige_Brat_Seq,Bru0Seq_1
+                                    geneIDColumn="FBgnID",seqColumn="CDSSeq",setGeneIsoformsInfo=F,useNegativeForNotFindi = F)
+
+
+# # save(FBgnID_FBtrID_BDGP6_22_96,file = "Data/FBgnID_FBtrID_BDGP6_22_96.RData")
+# # save(all3UTRs_Ensembl_mart_6_22_96,file = "Data/all3UTRs_Ensembl_mart_6_22_96.RData")
+# # save(all3UTR_pure,file = "Data/all3UTR_pure.RData")
+# # save(allCDS_r6_22,file = "Data/allCDS_r6_22.RData")
+
+ 
 
 ```
 
